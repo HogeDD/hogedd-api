@@ -13,9 +13,10 @@ The book provides the design philosophy. Current HTTP specifications, security g
 
 ## URI design
 
-- Business APIs use the `/api/v1` prefix. Operational endpoints such as `/api/health` are unversioned.
-- Use lowercase plural nouns for resource collections: `/api/v1/articles`.
-- Represent relationships with shallow hierarchy: `/api/v1/articles/{article_id}/comments`.
+- The API is hosted on `api.hogedd.com`, so paths do not repeat an `/api` prefix.
+- Business APIs use the `/v1` prefix. Operational endpoints such as `/health` are unversioned.
+- Use lowercase plural nouns for resource collections: `/v1/articles`.
+- Represent relationships with shallow hierarchy: `/v1/articles/{article_id}/comments`.
 - Do not put verbs, implementation names, file extensions, or UI terminology in URIs.
 - Use hyphens when a multiword URI segment is unavoidable.
 - Use query parameters for filtering, sorting, field selection, and pagination, not to identify the primary resource.
