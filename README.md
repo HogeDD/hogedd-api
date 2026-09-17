@@ -7,8 +7,8 @@ Goで実装したVercel Functions APIです。現在の公開エンドポイン�
 ## Endpoint
 
 ```http
-GET /api/health
-HEAD /api/health
+GET /health
+HEAD /health
 ```
 
 正常時は `200 OK` を返します。
@@ -65,7 +65,7 @@ go vet ./...
 
 ## Deploy to Vercel
 
-Vercel CLIでプロジェクトを紐づけてデプロイします。追加の `vercel.json` は不要です。
+Vercel CLIでプロジェクトを紐づけてデプロイします。
 
 ```sh
 npm install --global vercel
@@ -73,6 +73,6 @@ vercel
 vercel --prod
 ```
 
-Vercelは [`api/health/index.go`](api/health/index.go) を `/api/health` のFunctionとしてビルドします。
+公開APIの `/health` は `vercel.json` により、Vercel内部の [`api/health/index.go`](api/health/index.go) へrewriteされます。利用者に内部の `/api` prefixは見せません。
 
 `cmd/server` と `internal/platform/httpserver` はローカル実行専用です。VercelではTCPポートを待ち受けず、Functionの `Handler` がリクエストごとに呼び出されます。

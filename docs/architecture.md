@@ -89,6 +89,6 @@ Do not pass `*http.Request`, environment variables, ORM models, or database clie
 
 ## Health semantics
 
-`/api/health` is a liveness endpoint. It only proves that the function can execute and return HTTP. It must remain fast and must not call databases or external APIs.
+`/health` is a liveness endpoint. Vercel rewrites it internally to the Function at `/api/health`; the internal path is not part of the public API contract. The endpoint only proves that the function can execute and return HTTP. It must remain fast and must not call databases or external APIs.
 
 When dependencies are introduced, add a separate readiness endpoint. Readiness checks should have individual timeouts, run concurrently where appropriate, return a generic public response, and log detailed failures internally.
