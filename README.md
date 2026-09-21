@@ -15,6 +15,7 @@ GET /v1/me
 一覧は `{ "data": [...] }`、詳細はアプリ1件のJSONを返します。準備中または存在しないslugは`404`です。現在は`hogedd-web`の定義を元にした5件をメモリで保持し、公開済みのClean Tasksだけを返します。契約は [OpenAPI](docs/openapi.yaml)、処理のつながりは [Contentの処理の流れ](docs/content-flow.md) を参照してください。
 
 `GET /v1/me`はAuth0のAccess Tokenを要求し、検証済みの`issuer`と`subject`を返します。
+認証環境変数が両方未設定の環境では、このendpointだけがすべてのTokenを`401`で拒否します。
 
 ```sh
 curl -i http://localhost:8080/v1/apps

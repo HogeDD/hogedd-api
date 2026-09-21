@@ -15,6 +15,19 @@ type AuthenticationConfig struct {
 	Audience string
 }
 
+// LoadOptionalAuthentication は認証設定が存在する場合だけ検証済み設定を返します。
+// issuerとaudienceが両方未指定なら無効として扱い、片方だけの設定はエラーにします。
+func LoadOptionalAuthentication() (AuthenticationConfig, bool, error) {
+	if os.Getenv("AUTH0_ISSUER_URL") == "" && os.Getenv("AUTH0_AUDIENCE") == "" {
+		return AuthenticationConfig{}, false, nil
+	}
+	config, err := LoadAuthentication()
+	if err != nil {
+		return AuthenticationConfig{}, false, err
+	}
+	return config, true, nil
+}
+
 // LoadAuthentication はAuth0のAccess Token検証設定を環境変数から読み取ります。
 // issuerはHTTPSの絶対URL、audienceは空でないopaqueな識別子である必要があります。
 func LoadAuthentication() (AuthenticationConfig, error) {

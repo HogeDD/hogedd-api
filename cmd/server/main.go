@@ -22,18 +22,22 @@ func main() {
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
 	slog.SetDefault(logger)
-	authenticationConfig, err := config.LoadAuthentication()
+	authenticationConfig, authenticationEnabled, err := config.LoadOptionalAuthentication()
 	if err != nil {
 		logger.Error("load authentication configuration", "error", err)
 		os.Exit(1)
 	}
-	accessTokenVerifier, err := auth0.NewVerifier(authenticationConfig)
-	if err != nil {
-		logger.Error("build access token verifier", "error", err)
-		os.Exit(1)
+	var applicationOptions []app.Option
+	if authenticationEnabled {
+		accessTokenVerifier, err := auth0.NewVerifier(authenticationConfig)
+		if err != nil {
+			logger.Error("build access token verifier", "error", err)
+			os.Exit(1)
+		}
+		applicationOptions = append(applicationOptions, app.WithAccessTokenVerifier(accessTokenVerifier))
 	}
 
-	application, err := app.New(logger, app.WithAccessTokenVerifier(accessTokenVerifier))
+	application, err := app.New(logger, applicationOptions...)
 	if err != nil {
 		logger.Error("build application", "error", err)
 		os.Exit(1)

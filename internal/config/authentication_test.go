@@ -43,3 +43,25 @@ func TestLoadAuthenticationRejectsInvalidConfiguration(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadOptionalAuthentication(t *testing.T) {
+	t.Run("disabled when both values are absent", func(t *testing.T) {
+		t.Setenv("AUTH0_ISSUER_URL", "")
+		t.Setenv("AUTH0_AUDIENCE", "")
+
+		_, enabled, err := LoadOptionalAuthentication()
+		if err != nil || enabled {
+			t.Fatalf("LoadOptionalAuthentication() enabled = %v, error = %v", enabled, err)
+		}
+	})
+
+	t.Run("rejects partial configuration", func(t *testing.T) {
+		t.Setenv("AUTH0_ISSUER_URL", "https://hogedd.jp.auth0.com/")
+		t.Setenv("AUTH0_AUDIENCE", "")
+
+		_, _, err := LoadOptionalAuthentication()
+		if err == nil {
+			t.Fatal("LoadOptionalAuthentication() error = nil, want error")
+		}
+	})
+}
