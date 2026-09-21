@@ -37,6 +37,7 @@ VercelはGoコードを単一のbackend Functionへ束ねる場合がありま�
 | `internal/content/transport/http` | Content固有のHTTP handlersとrequest/response DTO |
 | `internal/transport/httpapi` | Context共通のrouting、response、middleware |
 | `internal/platform/httpserver` | Standard-library HTTP server lifecycle |
+| `internal/platform/postgres` | PostgreSQL connection pool and embedded schema migrations |
 
 ## Domain-driven design
 
@@ -90,6 +91,8 @@ These directories are created only when the context needs them. Empty layers, ma
 Repository interfaces are introduced when an aggregate needs collection-like persistence behavior, not merely because a database has been added. They use domain language such as `FindPublishedArticle` or `Save`, return domain types, and do not expose SQL rows or ORM models. Query-heavy read models may use dedicated query ports instead of forcing every read through an aggregate repository.
 
 Transactions belong to application use cases. Infrastructure supplies the transaction implementation, while domain objects remain unaware of database sessions and transaction handles.
+
+Schema migrationはApplication起動時に自動実行せず、`cmd/migrate` から明示的に適用します。Vercel Functionsの各instanceが同時にDDLを実行することを避け、deployとschema変更の順序を管理できるようにするためです。実行時接続にはpooler、migrationにはdirect connectionを使います。
 
 ### Modeling rules
 
