@@ -49,6 +49,11 @@ curl -i http://localhost:8080/health
 | `PORT` | `8080` | ローカルHTTPサーバ専用のポート |
 | `APP_ENV` | `VERCEL_ENV` または `development` | 任意の実行環境名 |
 | `LOG_LEVEL` | `info` | ローカルとVercel共通。`debug`, `info`, `warn`, `error` |
+| `DATABASE_URL` | なし | Neonのpooled connection string。DBを使う処理で必須 |
+| `DATABASE_URL_UNPOOLED` | なし | Neonのdirect connection string。migration実行時だけ使用 |
+| `DATABASE_MIGRATION_URL` | なし | migration先を明示的に上書きする場合だけ使用 |
+| `DATABASE_MAX_OPEN_CONNS` | `5` | 1インスタンスが保持する最大DB接続数 |
+| `DATABASE_MAX_IDLE_CONNS` | `2` | 1インスタンスが保持する最大idle接続数 |
 
 すべてのHTTPレスポンスにrequest ID、キャッシュ抑止、セキュリティヘッダーが付与されます。アクセスログはJSON形式で標準出力へ出力されます。
 
@@ -68,6 +73,16 @@ vercel env pull .env.local
 ```
 
 新しい環境変数を追加するときは [`.env.example`](.env.example) にキー名と安全なサンプル値だけを追加します。Go標準ライブラリは `.env.local` を自動では読み込まないため、通常は `vercel env run` またはシェルから環境変数を渡します。
+
+### Database migrations
+
+PostgreSQL schemaは `internal/platform/postgres/migrations` の連番SQLで管理します。Application起動時にはmigrationを実行せず、deploy前の独立した操作として適用します。
+
+```sh
+DATABASE_URL_UNPOOLED='postgresql://...' go run ./cmd/migrate
+```
+
+Neonでは、API実行時の `DATABASE_URL` にpooled connection string、migration用の `DATABASE_URL_UNPOOLED` にdirect connection stringを設定します。Vercel Marketplace連携では両方が自動設定されます。接続文字列をshell historyやログへ残さず、`vercel env run -- go run ./cmd/migrate` でDevelopment環境へ適用できます。
 
 ## Test
 

@@ -140,6 +140,9 @@ gofmt -w <変更したGoファイル>
 go test ./...
 go vet ./...
 
+# DB migration（DATABASE_URL_UNPOOLEDが必要）
+go run ./cmd/migrate
+
 # 共有処理、並行処理、状態を持つ処理を変更した場合
 go test -race ./...
 ```
