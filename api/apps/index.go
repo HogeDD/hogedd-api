@@ -21,7 +21,7 @@ func newApplication() *app.Application {
 	return application
 }
 
-// Handler はVercel Functionsから呼び出されるヘルスチェックのエントリーポイントです。
+// Handler はVercel Functionsから呼び出される公開アプリ一覧の入口です。
 func Handler(w http.ResponseWriter, r *http.Request) {
-	application.HealthHandler().ServeHTTP(w, r)
+	application.AppsListHandler().ServeHTTP(w, r)
 }

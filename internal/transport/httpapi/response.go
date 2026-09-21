@@ -42,9 +42,23 @@ func (r *Responder) JSON(w http.ResponseWriter, status int, value any) {
 
 // Error は安定したエラーコードとrequest IDを持つ共通エラー形式を返します。
 func (r *Responder) Error(w http.ResponseWriter, req *http.Request, status int, code, message string) {
+	if req.Method == http.MethodHead {
+		r.PrepareJSON(w)
+		w.WriteHeader(status)
+		return
+	}
 	r.JSON(w, status, errorBody{Error: errorDetail{
 		Code:      code,
 		Message:   message,
 		RequestID: RequestIDFromContext(req.Context()),
 	}})
+}
+
+// InternalError は詳細を構造化ログへ記録し、内部情報を含まない500レスポンスを返します。
+func (r *Responder) InternalError(w http.ResponseWriter, req *http.Request, message string, err error) {
+	r.logger.ErrorContext(req.Context(), message,
+		"error", err,
+		"request_id", RequestIDFromContext(req.Context()),
+	)
+	r.Error(w, req, http.StatusInternalServerError, "internal_error", "internal server error")
 }

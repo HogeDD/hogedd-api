@@ -1,0 +1,139 @@
+openapi: 3.1.0
+info:
+  title: HogeDD API
+  version: 1.0.0
+servers:
+  - url: https://api.hogedd.com
+paths:
+  /health:
+    get:
+      summary: 稼働確認
+      responses:
+        "200":
+          description: リクエストを処理可能
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    const: ok
+    head:
+      summary: 稼働確認（本文なし）
+      responses:
+        "200":
+          description: リクエストを処理可能
+  /v1/apps:
+    get:
+      summary: 公開済みアプリ一覧
+      responses:
+        "200":
+          description: 公開済みアプリを配列で返す
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PublishedApp"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    head:
+      summary: 公開済みアプリ一覧の状態確認（本文なし）
+      responses:
+        "200":
+          description: 取得可能
+        "500":
+          description: サーバーエラー
+  /v1/apps/{slug}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+        description: アプリを識別する小文字英数字とハイフンの文字列
+    get:
+      summary: 公開済みアプリを1件取得
+      responses:
+        "200":
+          description: 公開済みアプリ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishedApp"
+        "404":
+          $ref: "#/components/responses/AppNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    head:
+      summary: 公開済みアプリの状態確認（本文なし）
+      responses:
+        "200":
+          description: 取得可能
+        "404":
+          description: 存在しないか未公開
+        "500":
+          description: サーバーエラー
+components:
+  schemas:
+    PublishedApp:
+      type: object
+      required: [slug, title, description, status, published_at, tags, development_drive, youtube_url]
+      properties:
+        slug:
+          type: string
+          example: clean-tasks
+        title:
+          type: string
+          example: Clean Tasks
+        description:
+          type: string
+        status:
+          type: string
+          const: published
+        published_at:
+          type: string
+          format: date-time
+          example: 2026-05-30T00:00:00Z
+        tags:
+          type: array
+          items:
+            type: string
+        development_drive:
+          type: string
+        youtube_url:
+          type: string
+          format: uri
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            request_id:
+              type: string
+  responses:
+    AppNotFound:
+      description: 存在しないか未公開
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    InternalError:
+      description: サーバーエラー
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"

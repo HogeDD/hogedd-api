@@ -9,6 +9,38 @@ import (
 	"testing"
 )
 
+func TestMiddlewareStackAppliesCommonAndEndpointMiddlewareInOrder(t *testing.T) {
+	t.Parallel()
+
+	var calls []string
+	record := func(name string) Middleware {
+		return func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls = append(calls, name+":before")
+				next.ServeHTTP(w, r)
+				calls = append(calls, name+":after")
+			})
+		}
+	}
+	stack := NewMiddlewareStack(record("common"))
+	handler := stack.Wrap(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls = append(calls, "handler")
+		w.WriteHeader(http.StatusNoContent)
+	}), record("endpoint"))
+
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+
+	want := []string{"common:before", "endpoint:before", "handler", "endpoint:after", "common:after"}
+	if len(calls) != len(want) {
+		t.Fatalf("calls = %v, want %v", calls, want)
+	}
+	for i := range want {
+		if calls[i] != want[i] {
+			t.Fatalf("calls = %v, want %v", calls, want)
+		}
+	}
+}
+
 func TestRecover(t *testing.T) {
 	t.Parallel()
 
