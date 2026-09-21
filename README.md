@@ -9,9 +9,13 @@ Goで実装したVercel Functions APIです。公開済みアプリの読み取�
 ```http
 GET /v1/apps
 GET /v1/apps/{slug}
+GET /v1/me
 ```
 
 一覧は `{ "data": [...] }`、詳細はアプリ1件のJSONを返します。準備中または存在しないslugは`404`です。現在は`hogedd-web`の定義を元にした5件をメモリで保持し、公開済みのClean Tasksだけを返します。契約は [OpenAPI](docs/openapi.yaml)、処理のつながりは [Contentの処理の流れ](docs/content-flow.md) を参照してください。
+
+`GET /v1/me`はAuth0のAccess Tokenを要求し、検証済みの`issuer`と`subject`を返します。
+認証環境変数が両方未設定の環境では、このendpointだけがすべてのTokenを`401`で拒否します。
 
 ```sh
 curl -i http://localhost:8080/v1/apps
@@ -49,6 +53,8 @@ curl -i http://localhost:8080/health
 | `PORT` | `8080` | ローカルHTTPサーバ専用のポート |
 | `APP_ENV` | `VERCEL_ENV` または `development` | 任意の実行環境名 |
 | `LOG_LEVEL` | `info` | ローカルとVercel共通。`debug`, `info`, `warn`, `error` |
+| `AUTH0_ISSUER_URL` | なし | Auth0 tenantのissuer。末尾の`/`を含むHTTPS URL |
+| `AUTH0_AUDIENCE` | なし | Auth0で設定したHogeDD APIの識別子 |
 | `DATABASE_URL` | なし | Neonのpooled connection string。DBを使う処理で必須 |
 | `DATABASE_URL_UNPOOLED` | なし | Neonのdirect connection string。migration実行時だけ使用 |
 | `DATABASE_MIGRATION_URL` | なし | migration先を明示的に上書きする場合だけ使用 |

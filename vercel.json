@@ -12,6 +12,10 @@
     {
       "source": "/v1/apps/:slug",
       "destination": "/api/apps/detail?slug=:slug"
+    },
+    {
+      "source": "/v1/me",
+      "destination": "/api/me"
     }
   ]
 }
