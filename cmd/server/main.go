@@ -9,6 +9,7 @@ import (
 
 	"github.com/iwasawa/hogedd-api/internal/app"
 	"github.com/iwasawa/hogedd-api/internal/config"
+	"github.com/iwasawa/hogedd-api/internal/identity/infrastructure/auth0"
 	"github.com/iwasawa/hogedd-api/internal/platform/httpserver"
 )
 
@@ -21,8 +22,18 @@ func main() {
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
 	slog.SetDefault(logger)
+	authenticationConfig, err := config.LoadAuthentication()
+	if err != nil {
+		logger.Error("load authentication configuration", "error", err)
+		os.Exit(1)
+	}
+	accessTokenVerifier, err := auth0.NewVerifier(authenticationConfig)
+	if err != nil {
+		logger.Error("build access token verifier", "error", err)
+		os.Exit(1)
+	}
 
-	application, err := app.New(logger)
+	application, err := app.New(logger, app.WithAccessTokenVerifier(accessTokenVerifier))
 	if err != nil {
 		logger.Error("build application", "error", err)
 		os.Exit(1)

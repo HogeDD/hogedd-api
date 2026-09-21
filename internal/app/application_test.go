@@ -1,13 +1,25 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/iwasawa/hogedd-api/internal/identity"
 )
+
+type accessTokenVerifierStub struct {
+	identity identity.Identity
+	err      error
+}
+
+func (s accessTokenVerifierStub) Verify(context.Context, string) (identity.Identity, error) {
+	return s.identity, s.err
+}
 
 func TestApplicationRoutes(t *testing.T) {
 	t.Parallel()
@@ -30,6 +42,8 @@ func TestApplicationRoutes(t *testing.T) {
 		{path: "/api/apps", wantStatus: http.StatusOK},
 		{path: "/api/apps/detail?slug=clean-tasks", wantStatus: http.StatusOK},
 		{path: "/api/apps/detail?slug=chinchin", wantStatus: http.StatusNotFound},
+		{path: "/v1/me", wantStatus: http.StatusUnauthorized},
+		{path: "/api/me", wantStatus: http.StatusUnauthorized},
 	}
 
 	for _, tt := range tests {
@@ -45,6 +59,41 @@ func TestApplicationRoutes(t *testing.T) {
 				t.Error("X-Request-ID is empty")
 			}
 		})
+	}
+}
+
+func TestApplicationProtectsMeRoute(t *testing.T) {
+	t.Parallel()
+
+	authenticated, err := identity.New("https://hogedd.jp.auth0.com/", "auth0|owner")
+	if err != nil {
+		t.Fatalf("identity.New() error = %v", err)
+	}
+	application, err := New(
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		WithAccessTokenVerifier(accessTokenVerifierStub{identity: authenticated}),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
+	rec := httptest.NewRecorder()
+
+	application.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var body struct {
+		Issuer  string `json:"issuer"`
+		Subject string `json:"subject"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.Issuer != authenticated.Issuer() || body.Subject != authenticated.Subject() {
+		t.Errorf("body = %+v", body)
 	}
 }
 

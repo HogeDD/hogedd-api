@@ -30,6 +30,8 @@ VercelはGoコードを単一のbackend Functionへ束ねる場合がありま�
 | `cmd/server` | Local process lifecycle and signal handling |
 | `internal/app` | Dependency construction and middleware composition |
 | `internal/config` | Environment parsing and validation |
+| `internal/identity` | Provider非依存の検証済み認証主体とrequest context連携 |
+| `internal/identity/infrastructure/auth0` | Auth0 JWKSを使うJWT Access Token検証adapter |
 | `internal/content/domain` | App identity, publication state, and business rules |
 | `internal/content/application` | Published-App use cases and their required interfaces |
 | `internal/content/infrastructure` | Seeded in-memory App source |

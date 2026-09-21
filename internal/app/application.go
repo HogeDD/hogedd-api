@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -8,8 +10,32 @@ import (
 	"github.com/iwasawa/hogedd-api/internal/content/infrastructure"
 	contenthttp "github.com/iwasawa/hogedd-api/internal/content/transport/http"
 	"github.com/iwasawa/hogedd-api/internal/health"
+	"github.com/iwasawa/hogedd-api/internal/identity"
+	identityhttp "github.com/iwasawa/hogedd-api/internal/identity/transport/http"
 	"github.com/iwasawa/hogedd-api/internal/transport/httpapi"
 )
+
+type dependencies struct {
+	accessTokenVerifier httpapi.AccessTokenVerifier
+}
+
+// Option はApplicationが使用する外部依存を差し替えます。
+type Option func(*dependencies)
+
+// WithAccessTokenVerifier は保護endpointが使用するAccess Token検証器を設定します。
+func WithAccessTokenVerifier(verifier httpapi.AccessTokenVerifier) Option {
+	return func(dependencies *dependencies) {
+		if verifier != nil {
+			dependencies.accessTokenVerifier = verifier
+		}
+	}
+}
+
+type rejectAccessTokenVerifier struct{}
+
+func (rejectAccessTokenVerifier) Verify(context.Context, string) (identity.Identity, error) {
+	return identity.Identity{}, errors.New("access token verifier is not configured")
+}
 
 // Application はアプリケーション全体の依存関係を保持するコンポジションルートです。
 // 具体的な実装の組み立てをこの型へ集約し、各機能から依存生成の責務を分離します。
@@ -18,18 +44,24 @@ type Application struct {
 	healthHandler    http.Handler
 	appsListHandler  http.Handler
 	appDetailHandler http.Handler
+	meHandler        http.Handler
 }
 
 // New はロガーを受け取り、実行可能なApplicationを構築します。
 // loggerがnilの場合はslogのデフォルトロガーを使用します。
-func New(logger *slog.Logger) (*Application, error) {
+func New(logger *slog.Logger, options ...Option) (*Application, error) {
 	if logger == nil {
 		logger = slog.Default()
+	}
+	dependencies := dependencies{accessTokenVerifier: rejectAccessTokenVerifier{}}
+	for _, option := range options {
+		option(&dependencies)
 	}
 
 	responder := httpapi.NewResponder(logger)
 	healthService := health.NewService()
 	healthHandler := httpapi.NewHealthHandler(healthService, responder)
+	meHandler := identityhttp.NewMeHandler(responder)
 	appStore, err := infrastructure.NewSeededMemoryAppStore()
 	if err != nil {
 		return nil, err
@@ -45,16 +77,22 @@ func New(logger *slog.Logger) (*Application, error) {
 		httpapi.AccessLog(logger),
 		httpapi.Recover(logger, responder),
 	)
+	authenticatedMeHandler := httpapi.Chain(
+		meHandler,
+		httpapi.AuthenticateBearer(dependencies.accessTokenVerifier, responder),
+	)
 
 	return &Application{
 		handler: middleware.Wrap(httpapi.NewRouter(
 			healthHandler,
 			http.HandlerFunc(appsHandler.List),
 			http.HandlerFunc(appsHandler.Get),
+			authenticatedMeHandler,
 		)),
 		healthHandler:    middleware.Wrap(healthHandler),
 		appsListHandler:  middleware.Wrap(http.HandlerFunc(appsHandler.List)),
 		appDetailHandler: middleware.Wrap(http.HandlerFunc(appsHandler.Get)),
+		meHandler:        middleware.Wrap(authenticatedMeHandler),
 	}, nil
 }
 
@@ -76,4 +114,9 @@ func (a *Application) AppsListHandler() http.Handler {
 // AppDetailHandler はVercelの公開アプリ詳細Functionで使用するHandlerを返します。
 func (a *Application) AppDetailHandler() http.Handler {
 	return a.appDetailHandler
+}
+
+// MeHandler はVercelの認証主体取得Functionで使用するHandlerを返します。
+func (a *Application) MeHandler() http.Handler {
+	return a.meHandler
 }
