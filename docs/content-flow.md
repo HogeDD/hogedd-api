@@ -36,7 +36,7 @@ flowchart LR
     M --> H[AppsHandler.List]
 ```
 
-ローカルでは `internal/transport/httpapi.NewRouter` がパスを選びます。Vercelではrewrite後のFunctionが同じ `AppsHandler.List` を呼びます。以下は両方に共通する処理です。
+ローカルでは `internal/transport/httpapi.NewRouter` が公開パスを選びます。Vercelではrewrite後の内部パスを同じRouterが受け、`AppsHandler.List` を呼びます。以下は両方に共通する処理です。
 
 ## 一覧取得: GET /v1/apps
 
@@ -92,7 +92,7 @@ sequenceDiagram
 
 ## 1件取得: GET /v1/apps/{slug}
 
-一覧と同じmiddlewareを通った後の流れです。Vercelではrewriteの `slug` を `api/apps/detail/index.go` がpath valueへ渡します。
+一覧と同じmiddlewareを通った後の流れです。Vercelではrewriteでquery parameterになった `slug` を共通Routerがpath valueへ渡します。
 
 ```mermaid
 sequenceDiagram

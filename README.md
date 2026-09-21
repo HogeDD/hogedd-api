@@ -87,6 +87,6 @@ vercel
 vercel --prod
 ```
 
-公開APIの `/health` と `/v1/apps` は `vercel.json` により、Vercel内部のGo Functionへrewriteされます。`/v1/apps/{slug}` のslugはrewriteでFunctionへ渡します。利用者に内部の `/api` prefixは見せません。
+公開APIの `/health` と `/v1/apps` は `vercel.json` により、Vercel内部のrouteへrewriteされます。VercelがGoコードを単一のbackend Functionとして束ねる場合にも対応するため、共通Routerがrewrite後の内部routeを処理します。`/v1/apps/{slug}` のslugはquery parameterで内部routeへ渡し、Routerがpath valueへ変換します。利用者に内部の `/api` prefixは見せません。
 
 `cmd/server` と `internal/platform/httpserver` はローカル実行専用です。VercelではTCPポートを待ち受けず、Functionの `Handler` がリクエストごとに呼び出されます。

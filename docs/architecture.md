@@ -20,6 +20,8 @@ api/*, cmd/server -> internal/app -> HTTP adapters -> application -> domain
 
 `internal/app` だけが具象実装を組み立てます。HTTP adapter と infrastructure は application が必要とする型や port に合わせますが、domain は HTTP・DB・Vercel を知りません。`health` は業務domainではなく運用機能です。
 
+VercelはGoコードを単一のbackend Functionへ束ねる場合があります。その場合、rewrite後の `/api/...` も共通Routerへ届くため、Routerは公開routeとVercel内部routeの両方を登録します。内部routeは公開API contractではありません。
+
 ## Package responsibilities
 
 | Package | Responsibility |

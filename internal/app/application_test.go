@@ -27,6 +27,9 @@ func TestApplicationRoutes(t *testing.T) {
 		{path: "/v1/apps", wantStatus: http.StatusOK},
 		{path: "/v1/apps/clean-tasks", wantStatus: http.StatusOK},
 		{path: "/v1/apps/chinchin", wantStatus: http.StatusNotFound},
+		{path: "/api/apps", wantStatus: http.StatusOK},
+		{path: "/api/apps/detail?slug=clean-tasks", wantStatus: http.StatusOK},
+		{path: "/api/apps/detail?slug=chinchin", wantStatus: http.StatusNotFound},
 	}
 
 	for _, tt := range tests {

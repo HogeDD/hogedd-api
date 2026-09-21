@@ -10,5 +10,10 @@ func NewRouter(healthHandler, appsListHandler, appDetailHandler http.Handler) ht
 	mux.Handle("/api/health", healthHandler)
 	mux.Handle("/v1/apps", appsListHandler)
 	mux.Handle("/v1/apps/{slug}", appDetailHandler)
+	mux.Handle("/api/apps", appsListHandler)
+	mux.HandleFunc("/api/apps/detail", func(w http.ResponseWriter, r *http.Request) {
+		r.SetPathValue("slug", r.URL.Query().Get("slug"))
+		appDetailHandler.ServeHTTP(w, r)
+	})
 	return mux
 }
