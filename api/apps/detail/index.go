@@ -21,7 +21,8 @@ func newApplication() *app.Application {
 	return application
 }
 
-// Handler はVercel Functionsから呼び出されるヘルスチェックのエントリーポイントです。
+// Handler はrewriteされたslugをpath valueへ渡す公開アプリ詳細の入口です。
 func Handler(w http.ResponseWriter, r *http.Request) {
-	application.HealthHandler().ServeHTTP(w, r)
+	r.SetPathValue("slug", r.URL.Query().Get("slug"))
+	application.AppDetailHandler().ServeHTTP(w, r)
 }

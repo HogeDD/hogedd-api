@@ -14,6 +14,12 @@ import (
 // Middleware はHTTPハンドラーへ横断的な処理を追加する関数です。
 type Middleware func(http.Handler) http.Handler
 
+// MiddlewareStack は全endpointへ適用する共通middlewareを保持します。
+// Wrapへ追加のmiddlewareを渡すと、そのendpointだけに適用できます。
+type MiddlewareStack struct {
+	common []Middleware
+}
+
 type contextKey string
 
 const requestIDKey contextKey = "request_id"
@@ -27,6 +33,19 @@ func Chain(handler http.Handler, middleware ...Middleware) http.Handler {
 		handler = middleware[i](handler)
 	}
 	return handler
+}
+
+// NewMiddlewareStack は宣言順に実行される共通middlewareを保持するStackを構築します。
+func NewMiddlewareStack(common ...Middleware) *MiddlewareStack {
+	return &MiddlewareStack{common: append([]Middleware(nil), common...)}
+}
+
+// Wrap は共通middlewareの内側へendpoint固有middlewareを追加してHandlerを包みます。
+func (s *MiddlewareStack) Wrap(handler http.Handler, endpoint ...Middleware) http.Handler {
+	middleware := make([]Middleware, 0, len(s.common)+len(endpoint))
+	middleware = append(middleware, s.common...)
+	middleware = append(middleware, endpoint...)
+	return Chain(handler, middleware...)
 }
 
 // RequestIDFromContext はリクエストコンテキストに保存されたrequest IDを返します。

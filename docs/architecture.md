@@ -13,41 +13,65 @@ HTTP API contracts follow [API Design Guidelines](api-design.md), based primaril
 ## Dependency direction
 
 ```text
-api/health         cmd/server
-      \               /
-       internal/app              composition root
-          /     \
-  transport      platform        delivery and infrastructure
-       |
-    health                       operational capability
+api/*, cmd/server -> internal/app -> HTTP adapters -> application -> domain
+                         |                               ^
+                         `-> infrastructure -> application ports
 ```
 
-Dependencies point inward. The `health` package does not import HTTP, Vercel, configuration, or infrastructure packages.
-
-The current system has no business domain yet. `health` is deliberately not placed in a domain layer: liveness is an operational concern, not a business rule.
+`internal/app` だけが具象実装を組み立てます。HTTP adapter と infrastructure は application が必要とする型や port に合わせますが、domain は HTTP・DB・Vercel を知りません。`health` は業務domainではなく運用機能です。
 
 ## Package responsibilities
 
 | Package | Responsibility |
 | --- | --- |
-| `api/health` | Thin Vercel Function entrypoint |
+| `api/*` | Thin Vercel Function entrypoints; public paths are defined by rewrites |
 | `cmd/server` | Local process lifecycle and signal handling |
 | `internal/app` | Dependency construction and middleware composition |
 | `internal/config` | Environment parsing and validation |
+| `internal/content/domain` | App identity, publication state, and business rules |
+| `internal/content/application` | Published-App use cases and their required interfaces |
+| `internal/content/infrastructure` | Seeded in-memory App source |
 | `internal/health` | Transport-independent operational health capability |
-| `internal/transport/httpapi` | Routing, HTTP handlers, responses, and middleware |
+| `internal/content/transport/http` | Content固有のHTTP handlersとrequest/response DTO |
+| `internal/transport/httpapi` | Context共通のrouting、response、middleware |
 | `internal/platform/httpserver` | Standard-library HTTP server lifecycle |
 
 ## Domain-driven design
 
+現在実装中のContentコンテキストについては、[処理の流れとinterfaceの図](content-flow.md)を参照してください。
+
 Business functionality is organized by bounded context first, then by responsibility inside that context. We do not build one global `domain`, `service`, or `repository` directory shared by unrelated business concepts.
+
+### Directory ownership
+
+```text
+api/                             Vercelの薄いFunction入口
+cmd/server/                      ローカル実行入口
+internal/
+|-- app/                         依存の組み立てとroute登録
+|-- config/                      環境変数の読み取り・検証
+|-- platform/httpserver/         ローカルHTTPサーバのライフサイクル
+|-- transport/httpapi/           全context共通のHTTP基盤
+|-- health/                      業務外の運用機能
+`-- content/                     Contentというbounded context
+    |-- domain/                  App、Slug、公開状態などの業務規則
+    |-- application/             Use Case、結果型、必要なport
+    |-- infrastructure/          メモリ・将来のDBなどのadapter
+    `-- transport/http/          Content固有のhandler・DTO（移動時に追加）
+```
+
+Content固有handlerとDTOは `internal/content/transport/http` に置きます。共通 `httpapi` にはmiddleware、共通response、routerなど業務語彙を持たない処理だけを置きます。新しいcontextでも同じ境界を使い、context固有のHTTP表現を共通packageへ集めません。`health` は業務contextの形に無理に合わせません。
+
+全endpointへ適用するmiddlewareは `httpapi.MiddlewareStack` にまとめ、endpoint固有middlewareは `internal/app` でHandlerを組み立てる際に追加します。共通の安全な既定値を保ちながら、認証、CORS、rate limit、cacheなど適用範囲の異なる関心事をendpoint単位で設定できるようにします。
+
+ファイルは役割が検索しやすい名前（例: `list_published_apps_usecase.go`、`memory_app_store.go`、`apps_handler.go`）にします。1ファイルが長くなっただけで階層を増やさず、独立した責務や変更理由が現れた時に分割します。DB導入時も `repository/` や `service/` を先に空で作らず、実装を所有するcontextの `infrastructure` 内で必要な単位に分けます。認証は共通のトークン検証とcontext固有の権限判断を分離し、認証基盤をdomainへ入れません。
 
 ```text
 internal/<bounded-context>/
 |-- domain/          entities, value objects, aggregates, domain services, domain events
 |-- application/     commands, queries, use cases, transaction boundaries, ports
 |-- infrastructure/  database and external-service adapters
-`-- transport/http/  context-specific HTTP input and output mapping
+`-- transport/http/  context-specific HTTP input and output mapping (when needed)
 ```
 
 These directories are created only when the context needs them. Empty layers, marker interfaces, base repositories, and generic CRUD abstractions are avoided because they hide the language and invariants of the domain.

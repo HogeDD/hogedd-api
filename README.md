@@ -1,10 +1,24 @@
 # hogedd-api
 
-Goで実装したVercel Functions APIです。現在の公開エンドポイントはヘルスチェックだけです。
+Goで実装したVercel Functions APIです。公開済みアプリの読み取りAPIとヘルスチェックを提供します。
 
 アプリケーション、HTTP transport、ユースケース、実行基盤を分離しています。業務機能は境界づけられたコンテキストを起点にしたDDDで追加します。設計上のルールは [docs/architecture.md](docs/architecture.md)、HTTP APIの設計規約は [docs/api-design.md](docs/api-design.md) を参照してください。
 
 ## Endpoint
+
+```http
+GET /v1/apps
+GET /v1/apps/{slug}
+```
+
+一覧は `{ "data": [...] }`、詳細はアプリ1件のJSONを返します。準備中または存在しないslugは`404`です。現在は`hogedd-web`の定義を元にした5件をメモリで保持し、公開済みのClean Tasksだけを返します。契約は [OpenAPI](docs/openapi.yaml)、処理のつながりは [Contentの処理の流れ](docs/content-flow.md) を参照してください。
+
+```sh
+curl -i http://localhost:8080/v1/apps
+curl -i http://localhost:8080/v1/apps/clean-tasks
+```
+
+## Health
 
 ```http
 GET /health
@@ -73,6 +87,6 @@ vercel
 vercel --prod
 ```
 
-公開APIの `/health` は `vercel.json` により、Vercel内部の [`api/health/index.go`](api/health/index.go) へrewriteされます。利用者に内部の `/api` prefixは見せません。
+公開APIの `/health` と `/v1/apps` は `vercel.json` により、Vercel内部のGo Functionへrewriteされます。`/v1/apps/{slug}` のslugはrewriteでFunctionへ渡します。利用者に内部の `/api` prefixは見せません。
 
 `cmd/server` と `internal/platform/httpserver` はローカル実行専用です。VercelではTCPポートを待ち受けず、Functionの `Handler` がリクエストごとに呼び出されます。

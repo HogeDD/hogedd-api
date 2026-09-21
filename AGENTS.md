@@ -6,7 +6,7 @@
 
 - Goで実装したHogeDDのWeb APIです。
 - Production URLは `https://api.hogedd.com` です。
-- 現在の公開エンドポイントは `GET /health` と `HEAD /health` だけです。
+- 現在の公開エンドポイントは `/health`、`GET /v1/apps`、`GET /v1/apps/{slug}` です（各GETはHEADにも対応）。
 - Vercel Functionsへデプロイします。
 - 業務機能はDDDを前提に、境界づけられたコンテキスト単位で追加します。
 - HTTP API設計は『Web API: The Good Parts』を主な基準とし、現在のHTTP仕様とセキュリティ慣行を優先します。
@@ -167,6 +167,8 @@ internal/<bounded-context>/
 |-- infrastructure/
 `-- transport/http/
 ```
+
+Content固有handlerとDTOは `internal/content/transport/http` に置きます。共通 `internal/transport/httpapi` にはmiddleware、共通response、routerなど業務語彙を持たない処理だけを置きます。詳細は `docs/architecture.md` の Directory ownership を参照してください。
 
 ## HTTP API規約
 

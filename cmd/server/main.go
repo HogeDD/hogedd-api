@@ -22,7 +22,11 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
 	slog.SetDefault(logger)
 
-	application := app.New(logger)
+	application, err := app.New(logger)
+	if err != nil {
+		logger.Error("build application", "error", err)
+		os.Exit(1)
+	}
 	server := httpserver.New(cfg, application.Handler(), logger)
 
 	shutdownSignal, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -4,6 +4,8 @@ This project uses *Web API: The Good Parts* by Takaaki Mizuno as its primary API
 
 The book provides the design philosophy. Current HTTP specifications, security guidance, and platform constraints take precedence where practices have changed since publication.
 
+The source checklist transcribed from the book is kept in [Web API: The Good Parts Checklist](web-api-the-good-parts.md). This document records the project's decisions; the checklist is used as a review aid rather than applied mechanically.
+
 ## Contract first
 
 - Define the resource, use case, invariants, authorization rules, and failure cases before choosing a URI.

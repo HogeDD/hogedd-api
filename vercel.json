@@ -4,6 +4,14 @@
     {
       "source": "/health",
       "destination": "/api/health"
+    },
+    {
+      "source": "/v1/apps",
+      "destination": "/api/apps"
+    },
+    {
+      "source": "/v1/apps/:slug",
+      "destination": "/api/apps/detail?slug=:slug"
     }
   ]
 }
