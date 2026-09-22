@@ -62,10 +62,15 @@ func main() {
 			userpostgres.NewUserRegistrar(database),
 		)
 		getUser := userapp.NewGetCurrentUserUseCase(userpostgres.NewUserRegistrar(database))
+		profileRepository := userpostgres.NewProfileRepository(database)
 		applicationOptions = append(
 			applicationOptions,
 			app.WithUserGetter(getUser),
 			app.WithUserRegistrar(registerUser),
+			app.WithProfileUseCases(
+				userapp.NewGetCurrentProfileUseCase(profileRepository),
+				userapp.NewUpdateCurrentProfileUseCase(profileRepository),
+			),
 		)
 	}
 

@@ -28,6 +28,12 @@ func (s scannerStub) Scan(destinations ...any) error {
 			*destination = value.(bool)
 		case *sql.NullTime:
 			*destination = sql.NullTime{Time: value.(time.Time), Valid: true}
+		case *sql.NullString:
+			if source, ok := value.(sql.NullString); ok {
+				*destination = source
+			} else {
+				*destination = sql.NullString{String: value.(string), Valid: true}
+			}
 		}
 	}
 	return nil

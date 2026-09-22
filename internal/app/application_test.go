@@ -72,6 +72,8 @@ func TestApplicationRoutes(t *testing.T) {
 		{path: "/api/me", wantStatus: http.StatusUnauthorized},
 		{path: "/v1/users/me", wantStatus: http.StatusUnauthorized},
 		{path: "/api/users/me", wantStatus: http.StatusUnauthorized},
+		{path: "/v1/users/me/profile", wantStatus: http.StatusUnauthorized},
+		{path: "/api/users/me/profile", wantStatus: http.StatusUnauthorized},
 	}
 
 	for _, tt := range tests {

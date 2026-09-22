@@ -4,7 +4,7 @@ import "net/http"
 
 // NewRouter はローカル実行で使用するAPIルーターを構築します。
 // Vercelでは各Functionが対応するハンドラーを直接使用します。
-func NewRouter(healthHandler, appsListHandler, appDetailHandler, meHandler, userRegistrationHandler http.Handler) http.Handler {
+func NewRouter(healthHandler, appsListHandler, appDetailHandler, meHandler, userRegistrationHandler, userProfileHandler http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/health", healthHandler)
 	mux.Handle("/api/health", healthHandler)
@@ -12,6 +12,7 @@ func NewRouter(healthHandler, appsListHandler, appDetailHandler, meHandler, user
 	mux.Handle("/v1/apps/{slug}", appDetailHandler)
 	mux.Handle("/v1/me", meHandler)
 	mux.Handle("/v1/users/me", userRegistrationHandler)
+	mux.Handle("/v1/users/me/profile", userProfileHandler)
 	mux.Handle("/api/apps", appsListHandler)
 	mux.HandleFunc("/api/apps/detail", func(w http.ResponseWriter, r *http.Request) {
 		r.SetPathValue("slug", r.URL.Query().Get("slug"))
@@ -19,5 +20,6 @@ func NewRouter(healthHandler, appsListHandler, appDetailHandler, meHandler, user
 	})
 	mux.Handle("/api/me", meHandler)
 	mux.Handle("/api/users/me", userRegistrationHandler)
+	mux.Handle("/api/users/me/profile", userProfileHandler)
 	return mux
 }
