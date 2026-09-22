@@ -113,6 +113,20 @@ DATABASE_URL_UNPOOLED='postgresql://...' go run ./cmd/migrate
 
 Neonでは、API実行時の `DATABASE_URL` にpooled connection string、migration用の `DATABASE_URL_UNPOOLED` にdirect connection stringを設定します。Vercel Marketplace連携では両方が自動設定されます。接続文字列をshell historyやログへ残さず、`vercel env run -- go run ./cmd/migrate` でDevelopment環境へ適用できます。
 
+### Local database seed
+
+Local PostgreSQLへ代表的なUser状態を投入する場合:
+
+```sh
+APP_ENV=development \
+DATABASE_URL='postgresql://hogedd:hogedd@localhost:5432/hogedd?sslmode=disable' \
+go run ./cmd/seed
+```
+
+owner、admin、member、disabled memberの4パターンを冪等に保存します。接続先がDockerの`db`、`localhost`、loopback以外の場合は実行を拒否します。
+
+Local Auth0ユーザーもownerとして紐づける場合は、`SEED_AUTH_ISSUER`、`SEED_AUTH_SUBJECT`、`SEED_AUTH_EMAIL`をすべて指定します。表示名は`SEED_AUTH_DISPLAY_NAME`で変更できます。
+
 ## Test
 
 ```sh
