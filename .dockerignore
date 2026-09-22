@@ -1,0 +1,9 @@
+.git
+.github
+.vercel
+.env
+.env.*
+!.env.example
+coverage.out
+*.prof
+tmp
