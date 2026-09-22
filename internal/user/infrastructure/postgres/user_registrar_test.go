@@ -106,3 +106,33 @@ func TestUserRegistrarUpdatesOnlyExistingContactSnapshot(t *testing.T) {
 		t.Errorf("update query changes authorization: %s", queries[1])
 	}
 }
+
+func TestUserRegistrarFindsByIdentity(t *testing.T) {
+	registrar := &UserRegistrar{queryRow: func(_ context.Context, query string, args ...any) rowScanner {
+		if !strings.Contains(query, "WHERE auth_issuer = $1 AND auth_subject = $2") {
+			t.Errorf("query = %s", query)
+		}
+		if args[0] != "https://hogedd.jp.auth0.com/" || args[1] != "auth0|owner" {
+			t.Errorf("args = %v", args)
+		}
+		return userRow("member", "active")
+	}}
+
+	user, found, err := registrar.FindByIdentity(
+		context.Background(), "https://hogedd.jp.auth0.com/", "auth0|owner",
+	)
+	if err != nil || !found || user.ID() != "0199-user" {
+		t.Fatalf("FindByIdentity() = %v, %v, %v", user, found, err)
+	}
+}
+
+func TestUserRegistrarReturnsNotFound(t *testing.T) {
+	registrar := &UserRegistrar{queryRow: func(context.Context, string, ...any) rowScanner {
+		return scannerStub{err: sql.ErrNoRows}
+	}}
+
+	user, found, err := registrar.FindByIdentity(context.Background(), "issuer", "subject")
+	if err != nil || found || user != nil {
+		t.Fatalf("FindByIdentity() = %v, %v, %v", user, found, err)
+	}
+}

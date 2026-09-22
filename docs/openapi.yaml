@@ -106,6 +106,38 @@ paths:
         "401":
           description: Access Tokenがないか無効
   /v1/users/me:
+    get:
+      summary: 現在のHogeDD Userを取得
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 認証主体に紐づく登録済みUser
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: 認証主体に紐づくUserが未登録
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    head:
+      summary: 現在のHogeDD Userを取得可能か確認
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 取得可能
+        "401":
+          description: Access Tokenがないか無効
+        "404":
+          description: 認証主体に紐づくUserが未登録
     put:
       summary: 現在の認証主体をHogeDD Userとして登録
       description: 初回はmemberとして作成し、登録済みの場合はroleとstatusを維持してemail snapshotを更新する。
@@ -138,12 +170,12 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "405":
-          description: PUT以外のHTTP method
+          description: GET・HEAD・PUT以外のHTTP method
           headers:
             Allow:
               schema:
                 type: string
-                const: PUT
+                const: GET, HEAD, PUT
           content:
             application/json:
               schema:

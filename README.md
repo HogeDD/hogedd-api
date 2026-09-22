@@ -20,6 +20,8 @@ PUT /v1/users/me
 
 `PUT /v1/users/me`は認証済みの主体をHogeDD Userとして冪等に登録します。emailは同じAccess TokenでAuth0 `/userinfo`から取得し、初回は`member`として`201`、登録済みならrole・statusを維持して連絡先snapshotを更新し`200`を返します。このendpointには認証環境変数と`DATABASE_URL`が必要です。
 
+`GET /v1/users/me`は検証済みの`issuer + subject`に紐づく登録済みUserを返します。未登録の場合は`404`です。読み取り時はAuth0 `/userinfo`を呼ばず、PostgreSQLの保存済みsnapshotを返します。
+
 ```sh
 curl -i http://localhost:8080/v1/apps
 curl -i http://localhost:8080/v1/apps/clean-tasks

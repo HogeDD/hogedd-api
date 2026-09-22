@@ -22,6 +22,15 @@ type registerUseCaseStub struct {
 	token  string
 }
 
+type getUserUseCaseStub struct {
+	result userapp.RegisteredUserResult
+	err    error
+}
+
+func (s getUserUseCaseStub) Execute(context.Context, identity.Identity) (userapp.RegisteredUserResult, error) {
+	return s.result, s.err
+}
+
 func (s *registerUseCaseStub) Execute(
 	_ context.Context,
 	_ identity.Identity,
@@ -46,11 +55,47 @@ func authenticatedHandler(t *testing.T, useCase *registerUseCaseStub) http.Handl
 		t.Fatal(err)
 	}
 	responder := httpapi.NewResponder(slog.New(slog.NewTextHandler(io.Discard, nil)))
-	handler := NewRegisterHandler(useCase, responder)
+	handler := NewMeHandler(getUserUseCaseStub{}, useCase, responder)
 	return httpapi.AuthenticateBearer(verifierStub{identity: authenticated}, responder)(handler)
 }
 
-func TestRegisterHandlerCreatesUser(t *testing.T) {
+func TestMeHandlerGetsCurrentUser(t *testing.T) {
+	authenticated, _ := identity.New("https://hogedd.jp.auth0.com/", "auth0|owner")
+	now := time.Date(2026, 9, 22, 0, 0, 0, 0, time.UTC)
+	responder := httpapi.NewResponder(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler := NewMeHandler(getUserUseCaseStub{result: userapp.RegisteredUserResult{
+		ID: "0199-user", Email: "owner@example.com", EmailVerified: true,
+		Role: "member", Status: "active", CreatedAt: now, UpdatedAt: now,
+	}}, &registerUseCaseStub{}, responder)
+	protected := httpapi.AuthenticateBearer(verifierStub{identity: authenticated}, responder)(handler)
+	request := httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)
+	request.Header.Set("Authorization", "Bearer access-token")
+	recorder := httptest.NewRecorder()
+
+	protected.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "owner@example.com") {
+		t.Fatalf("status/body = %d, %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestMeHandlerReturnsNotFound(t *testing.T) {
+	authenticated, _ := identity.New("https://hogedd.jp.auth0.com/", "auth0|missing")
+	responder := httpapi.NewResponder(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler := NewMeHandler(getUserUseCaseStub{err: userapp.ErrUserNotFound}, &registerUseCaseStub{}, responder)
+	protected := httpapi.AuthenticateBearer(verifierStub{identity: authenticated}, responder)(handler)
+	request := httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)
+	request.Header.Set("Authorization", "Bearer access-token")
+	recorder := httptest.NewRecorder()
+
+	protected.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestMeHandlerCreatesUser(t *testing.T) {
 	now := time.Date(2026, 9, 22, 0, 0, 0, 0, time.UTC)
 	useCase := &registerUseCaseStub{result: userapp.RegisteredUserResult{
 		ID:            "0199-user",
@@ -86,7 +131,7 @@ func TestRegisterHandlerCreatesUser(t *testing.T) {
 	}
 }
 
-func TestRegisterHandlerReturnsOKForExistingUser(t *testing.T) {
+func TestMeHandlerReturnsOKForExistingUser(t *testing.T) {
 	useCase := &registerUseCaseStub{result: userapp.RegisteredUserResult{Created: false}}
 	handler := authenticatedHandler(t, useCase)
 	request := httptest.NewRequest(http.MethodPut, "/v1/users/me", nil)
@@ -100,7 +145,7 @@ func TestRegisterHandlerReturnsOKForExistingUser(t *testing.T) {
 	}
 }
 
-func TestRegisterHandlerRejectsMethodAndBody(t *testing.T) {
+func TestMeHandlerRejectsMethodAndBody(t *testing.T) {
 	for _, test := range []struct {
 		name   string
 		method string
@@ -123,7 +168,7 @@ func TestRegisterHandlerRejectsMethodAndBody(t *testing.T) {
 	}
 }
 
-func TestRegisterHandlerMapsProfileFailureToBadGateway(t *testing.T) {
+func TestMeHandlerMapsProfileFailureToBadGateway(t *testing.T) {
 	useCase := &registerUseCaseStub{err: errors.New("wrapped: " + userapp.ErrProfileUnavailable.Error())}
 	useCase.err = errors.Join(useCase.err, userapp.ErrProfileUnavailable)
 	handler := authenticatedHandler(t, useCase)

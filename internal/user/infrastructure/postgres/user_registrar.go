@@ -21,6 +21,26 @@ type UserRegistrar struct {
 	queryRow queryRowFunc
 }
 
+// FindByIdentity はissuerとsubjectに一致するUserを取得します。
+func (r *UserRegistrar) FindByIdentity(
+	ctx context.Context,
+	authIssuer string,
+	authSubject string,
+) (*userdomain.User, bool, error) {
+	const query = `
+SELECT id, auth_issuer, auth_subject, email, email_verified, role, status, created_at, updated_at
+FROM users
+WHERE auth_issuer = $1 AND auth_subject = $2`
+	user, err := scanUser(r.queryRow(ctx, query, authIssuer, authSubject))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("find user by identity: %w", err)
+	}
+	return user, true, nil
+}
+
 // NewUserRegistrar はDB接続を使うUserRegistrarを構築します。
 func NewUserRegistrar(db *sql.DB) *UserRegistrar {
 	return &UserRegistrar{queryRow: func(ctx context.Context, query string, args ...any) rowScanner {
