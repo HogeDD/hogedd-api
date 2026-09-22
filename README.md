@@ -48,12 +48,26 @@ HEAD /health
 
 ## Local development
 
+Host上で直接起動する場合:
+
 ```sh
 go run ./cmd/server
 curl -i http://localhost:8080/health
 ```
 
 ポートは `PORT` 環境変数で変更できます。終了シグナルを受けると、処理中のリクエストを待って安全に停止します。
+
+Dockerで起動する場合:
+
+```sh
+docker build -f Dockerfile.dev -t hogedd-api-dev .
+docker run --rm --init \
+  --publish 8080:8080 \
+  --mount type=bind,source="$PWD",target=/workspace \
+  hogedd-api-dev
+```
+
+`Dockerfile.dev`はLocal開発専用です。Airが`.go`ファイルの変更を検知し、APIを自動で再build・再起動します。認証やDBを使う場合は、必要な環境変数を`docker run`へ明示的に渡してください。複数serviceをまとめて起動する手順は`hogedd-local`で管理します。
 
 利用できる環境変数:
 
