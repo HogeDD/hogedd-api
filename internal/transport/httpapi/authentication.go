@@ -8,6 +8,8 @@ import (
 	"github.com/iwasawa/hogedd-api/internal/identity"
 )
 
+type accessTokenContextKey struct{}
+
 // AccessTokenVerifier はBearer Tokenを検証済みIdentityへ変換します。
 // 実装は署名、issuer、audience、有効期限をすべて検証する必要があります。
 type AccessTokenVerifier interface {
@@ -31,9 +33,17 @@ func AuthenticateBearer(verifier AccessTokenVerifier, responder *Responder) Midd
 			}
 
 			ctx := identity.NewContext(r.Context(), authenticated)
+			ctx = context.WithValue(ctx, accessTokenContextKey{}, token)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// AccessTokenFromContext はBearer認証で検証済みのraw Access Tokenを返します。
+// Tokenを必要とするサーバー間通信だけで使用し、responseやlogへ出力してはいけません。
+func AccessTokenFromContext(ctx context.Context) (string, bool) {
+	token, ok := ctx.Value(accessTokenContextKey{}).(string)
+	return token, ok && token != ""
 }
 
 func bearerToken(values []string) (string, bool) {

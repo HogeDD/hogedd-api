@@ -11,6 +11,10 @@ import (
 	"github.com/iwasawa/hogedd-api/internal/config"
 	"github.com/iwasawa/hogedd-api/internal/identity/infrastructure/auth0"
 	"github.com/iwasawa/hogedd-api/internal/platform/httpserver"
+	platformpostgres "github.com/iwasawa/hogedd-api/internal/platform/postgres"
+	userapp "github.com/iwasawa/hogedd-api/internal/user/application"
+	userauth0 "github.com/iwasawa/hogedd-api/internal/user/infrastructure/auth0"
+	userpostgres "github.com/iwasawa/hogedd-api/internal/user/infrastructure/postgres"
 )
 
 func main() {
@@ -35,6 +39,29 @@ func main() {
 			os.Exit(1)
 		}
 		applicationOptions = append(applicationOptions, app.WithAccessTokenVerifier(accessTokenVerifier))
+
+		databaseConfig, err := config.LoadDatabase()
+		if err != nil {
+			logger.Error("load database configuration", "error", err)
+			os.Exit(1)
+		}
+		database, err := platformpostgres.Open(context.Background(), databaseConfig)
+		if err != nil {
+			logger.Error("open database", "error", err)
+			os.Exit(1)
+		}
+		defer database.Close()
+
+		profileProvider, err := userauth0.NewProfileProvider(authenticationConfig.IssuerURL)
+		if err != nil {
+			logger.Error("build Auth0 profile provider", "error", err)
+			os.Exit(1)
+		}
+		registerUser := userapp.NewRegisterAuthenticatedUserUseCase(
+			profileProvider,
+			userpostgres.NewUserRegistrar(database),
+		)
+		applicationOptions = append(applicationOptions, app.WithUserRegistrar(registerUser))
 	}
 
 	application, err := app.New(logger, applicationOptions...)

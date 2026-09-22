@@ -13,10 +13,22 @@ import (
 	"github.com/iwasawa/hogedd-api/internal/identity"
 	identityhttp "github.com/iwasawa/hogedd-api/internal/identity/transport/http"
 	"github.com/iwasawa/hogedd-api/internal/transport/httpapi"
+	userapp "github.com/iwasawa/hogedd-api/internal/user/application"
+	userhttp "github.com/iwasawa/hogedd-api/internal/user/transport/http"
 )
 
 type dependencies struct {
 	accessTokenVerifier httpapi.AccessTokenVerifier
+	userRegistrar       userhttp.AuthenticatedUserRegistrar
+}
+
+// WithUserRegistrar は認証済みUser登録endpointが使用するUse Caseを設定します。
+func WithUserRegistrar(registrar userhttp.AuthenticatedUserRegistrar) Option {
+	return func(dependencies *dependencies) {
+		if registrar != nil {
+			dependencies.userRegistrar = registrar
+		}
+	}
 }
 
 // Option はApplicationが使用する外部依存を差し替えます。
@@ -37,14 +49,25 @@ func (rejectAccessTokenVerifier) Verify(context.Context, string) (identity.Ident
 	return identity.Identity{}, errors.New("access token verifier is not configured")
 }
 
+type unavailableUserRegistrar struct{}
+
+func (unavailableUserRegistrar) Execute(
+	context.Context,
+	identity.Identity,
+	string,
+) (userapp.RegisteredUserResult, error) {
+	return userapp.RegisteredUserResult{}, userapp.ErrRegistrationFailed
+}
+
 // Application はアプリケーション全体の依存関係を保持するコンポジションルートです。
 // 具体的な実装の組み立てをこの型へ集約し、各機能から依存生成の責務を分離します。
 type Application struct {
-	handler          http.Handler
-	healthHandler    http.Handler
-	appsListHandler  http.Handler
-	appDetailHandler http.Handler
-	meHandler        http.Handler
+	handler                 http.Handler
+	healthHandler           http.Handler
+	appsListHandler         http.Handler
+	appDetailHandler        http.Handler
+	meHandler               http.Handler
+	userRegistrationHandler http.Handler
 }
 
 // New はロガーを受け取り、実行可能なApplicationを構築します。
@@ -53,7 +76,10 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	dependencies := dependencies{accessTokenVerifier: rejectAccessTokenVerifier{}}
+	dependencies := dependencies{
+		accessTokenVerifier: rejectAccessTokenVerifier{},
+		userRegistrar:       unavailableUserRegistrar{},
+	}
 	for _, option := range options {
 		option(&dependencies)
 	}
@@ -62,6 +88,7 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 	healthService := health.NewService()
 	healthHandler := httpapi.NewHealthHandler(healthService, responder)
 	meHandler := identityhttp.NewMeHandler(responder)
+	userRegistrationHandler := userhttp.NewRegisterHandler(dependencies.userRegistrar, responder)
 	appStore, err := infrastructure.NewSeededMemoryAppStore()
 	if err != nil {
 		return nil, err
@@ -81,6 +108,10 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		meHandler,
 		httpapi.AuthenticateBearer(dependencies.accessTokenVerifier, responder),
 	)
+	authenticatedUserRegistrationHandler := httpapi.Chain(
+		userRegistrationHandler,
+		httpapi.AuthenticateBearer(dependencies.accessTokenVerifier, responder),
+	)
 
 	return &Application{
 		handler: middleware.Wrap(httpapi.NewRouter(
@@ -88,12 +119,19 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 			http.HandlerFunc(appsHandler.List),
 			http.HandlerFunc(appsHandler.Get),
 			authenticatedMeHandler,
+			authenticatedUserRegistrationHandler,
 		)),
-		healthHandler:    middleware.Wrap(healthHandler),
-		appsListHandler:  middleware.Wrap(http.HandlerFunc(appsHandler.List)),
-		appDetailHandler: middleware.Wrap(http.HandlerFunc(appsHandler.Get)),
-		meHandler:        middleware.Wrap(authenticatedMeHandler),
+		healthHandler:           middleware.Wrap(healthHandler),
+		appsListHandler:         middleware.Wrap(http.HandlerFunc(appsHandler.List)),
+		appDetailHandler:        middleware.Wrap(http.HandlerFunc(appsHandler.Get)),
+		meHandler:               middleware.Wrap(authenticatedMeHandler),
+		userRegistrationHandler: middleware.Wrap(authenticatedUserRegistrationHandler),
 	}, nil
+}
+
+// UserRegistrationHandler はVercelの認証済みUser登録Functionで使用するHandlerを返します。
+func (a *Application) UserRegistrationHandler() http.Handler {
+	return a.userRegistrationHandler
 }
 
 // Handler はローカルサーバで全ルートを提供するHTTPハンドラーを返します。

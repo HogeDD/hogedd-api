@@ -16,6 +16,10 @@
     {
       "source": "/v1/me",
       "destination": "/api/me"
+    },
+    {
+      "source": "/v1/users/me",
+      "destination": "/api/users/me"
     }
   ]
 }

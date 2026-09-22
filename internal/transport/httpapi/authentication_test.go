@@ -37,6 +37,9 @@ func TestAuthenticateBearerStoresVerifiedIdentity(t *testing.T) {
 		if !ok || got != authenticated {
 			t.Errorf("context Identity = %+v, %v", got, ok)
 		}
+		if token, ok := AccessTokenFromContext(r.Context()); !ok || token != "valid-token" {
+			t.Errorf("context Access Token = %q, %v", token, ok)
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
