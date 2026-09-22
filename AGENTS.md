@@ -243,6 +243,15 @@ Content固有handlerとDTOは `internal/content/transport/http` に置きます�
 - Bug修正では、可能な限り先に再現テストを追加します。
 - 時刻、乱数、外部I/Oへ依存するテストは決定的にします。
 
+## Local seed方針
+
+- Local seedはmigrationへ混在させず、明示commandでだけ投入します。
+- seedは冪等にし、複数回実行しても重複せず同じ代表状態へ戻るようにします。
+- test caseや不具合再現で新しいデータ状態が必要になった場合、既存seedで表現できるか確認します。複数機能のLocal確認に役立つ代表パターンなら、同じ変更でseedへ追記します。
+- 一つのunit testだけが必要とする細かな値はseedへ追加せず、そのtest内のfixtureとして管理します。
+- 実在する個人情報、password、token、Production由来の値をseedへ含めません。
+- Local seedは実行環境とDB接続先を検証し、ProductionやRemote DBへの誤投入を拒否します。
+
 ## 変更時の完了条件
 
 変更を完了する前に、該当する項目を確認してください。
