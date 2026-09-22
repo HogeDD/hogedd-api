@@ -21,6 +21,16 @@ type accessTokenVerifierStub struct {
 
 type userRegistrarStub struct{}
 
+type userGetterStub struct{}
+
+func (userGetterStub) Execute(context.Context, identity.Identity) (userapp.RegisteredUserResult, error) {
+	now := time.Date(2026, 9, 22, 0, 0, 0, 0, time.UTC)
+	return userapp.RegisteredUserResult{
+		ID: "0199-user", Email: "owner@example.com", EmailVerified: true,
+		Role: "member", Status: "active", CreatedAt: now, UpdatedAt: now,
+	}, nil
+}
+
 func (userRegistrarStub) Execute(
 	context.Context,
 	identity.Identity,
@@ -89,6 +99,7 @@ func TestApplicationProtectsUserRegistrationRoute(t *testing.T) {
 	application, err := New(
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		WithAccessTokenVerifier(accessTokenVerifierStub{identity: authenticated}),
+		WithUserGetter(userGetterStub{}),
 		WithUserRegistrar(userRegistrarStub{}),
 	)
 	if err != nil {
@@ -101,6 +112,28 @@ func TestApplicationProtectsUserRegistrationRoute(t *testing.T) {
 	application.Handler().ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestApplicationGetsCurrentUser(t *testing.T) {
+	t.Parallel()
+	authenticated, _ := identity.New("https://hogedd.jp.auth0.com/", "auth0|owner")
+	application, err := New(
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		WithAccessTokenVerifier(accessTokenVerifierStub{identity: authenticated}),
+		WithUserGetter(userGetterStub{}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)
+	request.Header.Set("Authorization", "Bearer test-token")
+	recorder := httptest.NewRecorder()
+
+	application.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 }

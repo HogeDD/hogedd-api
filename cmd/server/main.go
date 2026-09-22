@@ -61,7 +61,12 @@ func main() {
 			profileProvider,
 			userpostgres.NewUserRegistrar(database),
 		)
-		applicationOptions = append(applicationOptions, app.WithUserRegistrar(registerUser))
+		getUser := userapp.NewGetCurrentUserUseCase(userpostgres.NewUserRegistrar(database))
+		applicationOptions = append(
+			applicationOptions,
+			app.WithUserGetter(getUser),
+			app.WithUserRegistrar(registerUser),
+		)
 	}
 
 	application, err := app.New(logger, applicationOptions...)

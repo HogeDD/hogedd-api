@@ -103,6 +103,10 @@ func (uc *RegisterAuthenticatedUserUseCase) Execute(
 		return RegisteredUserResult{}, fmt.Errorf("%w: %v", ErrRegistrationFailed, err)
 	}
 
+	return toUserResult(registered, created), nil
+}
+
+func toUserResult(registered *userdomain.User, created bool) RegisteredUserResult {
 	return RegisteredUserResult{
 		ID:            registered.ID(),
 		Email:         registered.Email(),
@@ -112,5 +116,5 @@ func (uc *RegisterAuthenticatedUserUseCase) Execute(
 		CreatedAt:     registered.CreatedAt(),
 		UpdatedAt:     registered.UpdatedAt(),
 		Created:       created,
-	}, nil
+	}
 }

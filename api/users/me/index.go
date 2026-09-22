@@ -45,9 +45,11 @@ func newApplication() *app.Application {
 		profileProvider,
 		userpostgres.NewUserRegistrar(database),
 	)
+	getUser := userapp.NewGetCurrentUserUseCase(userpostgres.NewUserRegistrar(database))
 	application, err := app.New(
 		logger,
 		app.WithAccessTokenVerifier(accessTokenVerifier),
+		app.WithUserGetter(getUser),
 		app.WithUserRegistrar(registerUser),
 	)
 	if err != nil {

@@ -19,7 +19,17 @@ import (
 
 type dependencies struct {
 	accessTokenVerifier httpapi.AccessTokenVerifier
+	userGetter          userhttp.CurrentUserGetter
 	userRegistrar       userhttp.AuthenticatedUserRegistrar
+}
+
+// WithUserGetter は認証済みUser取得endpointが使用するUse Caseを設定します。
+func WithUserGetter(getter userhttp.CurrentUserGetter) Option {
+	return func(dependencies *dependencies) {
+		if getter != nil {
+			dependencies.userGetter = getter
+		}
+	}
 }
 
 // WithUserRegistrar は認証済みUser登録endpointが使用するUse Caseを設定します。
@@ -51,6 +61,15 @@ func (rejectAccessTokenVerifier) Verify(context.Context, string) (identity.Ident
 
 type unavailableUserRegistrar struct{}
 
+type unavailableUserGetter struct{}
+
+func (unavailableUserGetter) Execute(
+	context.Context,
+	identity.Identity,
+) (userapp.RegisteredUserResult, error) {
+	return userapp.RegisteredUserResult{}, userapp.ErrRegistrationFailed
+}
+
 func (unavailableUserRegistrar) Execute(
 	context.Context,
 	identity.Identity,
@@ -78,6 +97,7 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 	}
 	dependencies := dependencies{
 		accessTokenVerifier: rejectAccessTokenVerifier{},
+		userGetter:          unavailableUserGetter{},
 		userRegistrar:       unavailableUserRegistrar{},
 	}
 	for _, option := range options {
@@ -88,7 +108,7 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 	healthService := health.NewService()
 	healthHandler := httpapi.NewHealthHandler(healthService, responder)
 	meHandler := identityhttp.NewMeHandler(responder)
-	userRegistrationHandler := userhttp.NewRegisterHandler(dependencies.userRegistrar, responder)
+	userMeHandler := userhttp.NewMeHandler(dependencies.userGetter, dependencies.userRegistrar, responder)
 	appStore, err := infrastructure.NewSeededMemoryAppStore()
 	if err != nil {
 		return nil, err
@@ -108,8 +128,8 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		meHandler,
 		httpapi.AuthenticateBearer(dependencies.accessTokenVerifier, responder),
 	)
-	authenticatedUserRegistrationHandler := httpapi.Chain(
-		userRegistrationHandler,
+	authenticatedUserMeHandler := httpapi.Chain(
+		userMeHandler,
 		httpapi.AuthenticateBearer(dependencies.accessTokenVerifier, responder),
 	)
 
@@ -119,13 +139,13 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 			http.HandlerFunc(appsHandler.List),
 			http.HandlerFunc(appsHandler.Get),
 			authenticatedMeHandler,
-			authenticatedUserRegistrationHandler,
+			authenticatedUserMeHandler,
 		)),
 		healthHandler:           middleware.Wrap(healthHandler),
 		appsListHandler:         middleware.Wrap(http.HandlerFunc(appsHandler.List)),
 		appDetailHandler:        middleware.Wrap(http.HandlerFunc(appsHandler.Get)),
 		meHandler:               middleware.Wrap(authenticatedMeHandler),
-		userRegistrationHandler: middleware.Wrap(authenticatedUserRegistrationHandler),
+		userRegistrationHandler: middleware.Wrap(authenticatedUserMeHandler),
 	}, nil
 }
 
