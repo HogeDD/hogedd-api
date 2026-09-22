@@ -48,16 +48,16 @@ WHERE u.auth_issuer = $1 AND u.auth_subject = $2`
 
 // SaveByIdentity は認証主体に紐づくUserの表示名をupsertします。
 func (r *ProfileRepository) SaveByIdentity(ctx context.Context, issuer, subject, displayName string) (*userdomain.Profile, userdomain.Status, error) {
-	const query = `WITH current_user AS (
+	const query = `WITH matched_user AS (
   SELECT id, status FROM users WHERE auth_issuer = $1 AND auth_subject = $2
 ), saved AS (
   INSERT INTO user_profiles (user_id, display_name)
-  SELECT id, $3 FROM current_user WHERE status = 'active'
+  SELECT id, $3 FROM matched_user WHERE status = 'active'
   ON CONFLICT (user_id) DO UPDATE SET display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP
   RETURNING user_id, display_name
 )
-SELECT current_user.id, current_user.status, saved.display_name
-FROM current_user LEFT JOIN saved ON saved.user_id = current_user.id`
+SELECT matched_user.id, matched_user.status, saved.display_name
+FROM matched_user LEFT JOIN saved ON saved.user_id = matched_user.id`
 	var userID, statusValue string
 	var savedName sql.NullString
 	if err := r.queryRow(ctx, query, issuer, subject, displayName).Scan(&userID, &statusValue, &savedName); err != nil {

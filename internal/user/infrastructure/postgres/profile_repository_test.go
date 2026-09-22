@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 )
 
@@ -27,7 +28,13 @@ func TestProfileRepositoryFindsUserWithoutProfile(t *testing.T) {
 }
 
 func TestProfileRepositorySavesDisplayName(t *testing.T) {
-	repository := &ProfileRepository{queryRow: func(context.Context, string, ...any) rowScanner {
+	repository := &ProfileRepository{queryRow: func(_ context.Context, query string, _ ...any) rowScanner {
+		if strings.Contains(query, "current_user") {
+			t.Fatal("query uses PostgreSQL reserved current_user keyword as an identifier")
+		}
+		if !strings.Contains(query, "matched_user") {
+			t.Fatal("query does not use the matched_user CTE")
+		}
 		return scannerStub{values: []any{"0199-user", "active", "HogeDD"}}
 	}}
 	profile, status, err := repository.SaveByIdentity(context.Background(), "issuer", "subject", "HogeDD")
