@@ -8,13 +8,29 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/iwasawa/hogedd-api/internal/identity"
+	userapp "github.com/iwasawa/hogedd-api/internal/user/application"
 )
 
 type accessTokenVerifierStub struct {
 	identity identity.Identity
 	err      error
+}
+
+type userRegistrarStub struct{}
+
+func (userRegistrarStub) Execute(
+	context.Context,
+	identity.Identity,
+	string,
+) (userapp.RegisteredUserResult, error) {
+	now := time.Date(2026, 9, 22, 0, 0, 0, 0, time.UTC)
+	return userapp.RegisteredUserResult{
+		ID: "0199-user", Email: "owner@example.com", EmailVerified: true,
+		Role: "member", Status: "active", CreatedAt: now, UpdatedAt: now, Created: true,
+	}, nil
 }
 
 func (s accessTokenVerifierStub) Verify(context.Context, string) (identity.Identity, error) {
@@ -44,6 +60,8 @@ func TestApplicationRoutes(t *testing.T) {
 		{path: "/api/apps/detail?slug=chinchin", wantStatus: http.StatusNotFound},
 		{path: "/v1/me", wantStatus: http.StatusUnauthorized},
 		{path: "/api/me", wantStatus: http.StatusUnauthorized},
+		{path: "/v1/users/me", wantStatus: http.StatusUnauthorized},
+		{path: "/api/users/me", wantStatus: http.StatusUnauthorized},
 	}
 
 	for _, tt := range tests {
@@ -59,6 +77,31 @@ func TestApplicationRoutes(t *testing.T) {
 				t.Error("X-Request-ID is empty")
 			}
 		})
+	}
+}
+
+func TestApplicationProtectsUserRegistrationRoute(t *testing.T) {
+	t.Parallel()
+	authenticated, err := identity.New("https://hogedd.jp.auth0.com/", "auth0|owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	application, err := New(
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		WithAccessTokenVerifier(accessTokenVerifierStub{identity: authenticated}),
+		WithUserRegistrar(userRegistrarStub{}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPut, "/v1/users/me", nil)
+	request.Header.Set("Authorization", "Bearer test-token")
+	recorder := httptest.NewRecorder()
+
+	application.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 }
 

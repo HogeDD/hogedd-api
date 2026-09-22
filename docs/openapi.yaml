@@ -105,6 +105,57 @@ paths:
           description: 取得可能
         "401":
           description: Access Tokenがないか無効
+  /v1/users/me:
+    put:
+      summary: 現在の認証主体をHogeDD Userとして登録
+      description: 初回はmemberとして作成し、登録済みの場合はroleとstatusを維持してemail snapshotを更新する。
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 登録済みUserの連絡先snapshotを更新
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "201":
+          description: Userを新規登録
+          headers:
+            Location:
+              schema:
+                type: string
+                const: /v1/users/me
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: request bodyが指定されている
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "405":
+          description: PUT以外のHTTP method
+          headers:
+            Allow:
+              schema:
+                type: string
+                const: PUT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "502":
+          description: Auth0 user profileを取得できない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   securitySchemes:
     bearerAuth:
@@ -121,6 +172,30 @@ components:
           format: uri
         subject:
           type: string
+    User:
+      type: object
+      required: [id, email, email_verified, role, status, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        email_verified:
+          type: boolean
+        role:
+          type: string
+          enum: [owner, admin, member]
+        status:
+          type: string
+          enum: [active, disabled]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     PublishedApp:
       type: object
       required: [slug, title, description, status, published_at, tags, development_drive, youtube_url]

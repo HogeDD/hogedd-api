@@ -32,6 +32,10 @@ VercelはGoコードを単一のbackend Functionへ束ねる場合がありま�
 | `internal/config` | Environment parsing and validation |
 | `internal/identity` | Provider非依存の検証済み認証主体とrequest context連携 |
 | `internal/identity/infrastructure/auth0` | Auth0 JWKSを使うJWT Access Token検証adapter |
+| `internal/user/domain` | User identity、role、status、連絡先snapshotの規則 |
+| `internal/user/application` | 認証済みUser登録Use Caseと必要なport |
+| `internal/user/infrastructure` | Auth0 `/userinfo`とPostgreSQLのadapter |
+| `internal/user/transport/http` | User固有のHTTP handlerとresponse DTO |
 | `internal/content/domain` | App identity, publication state, and business rules |
 | `internal/content/application` | Published-App use cases and their required interfaces |
 | `internal/content/infrastructure` | Seeded in-memory App source |
@@ -58,11 +62,16 @@ internal/
 |-- platform/httpserver/         ローカルHTTPサーバのライフサイクル
 |-- transport/httpapi/           全context共通のHTTP基盤
 |-- health/                      業務外の運用機能
-`-- content/                     Contentというbounded context
+|-- content/                     Contentというbounded context
     |-- domain/                  App、Slug、公開状態などの業務規則
     |-- application/             Use Case、結果型、必要なport
     |-- infrastructure/          メモリ・将来のDBなどのadapter
     `-- transport/http/          Content固有のhandler・DTO（移動時に追加）
+`-- user/                        Userというbounded context
+    |-- domain/                  User、Role、Status
+    |-- application/             認証済みUser登録Use Caseとport
+    |-- infrastructure/          Auth0 profile・PostgreSQL adapter
+    `-- transport/http/          User登録handler・response DTO
 ```
 
 Content固有handlerとDTOは `internal/content/transport/http` に置きます。共通 `httpapi` にはmiddleware、共通response、routerなど業務語彙を持たない処理だけを置きます。新しいcontextでも同じ境界を使い、context固有のHTTP表現を共通packageへ集めません。`health` は業務contextの形に無理に合わせません。
