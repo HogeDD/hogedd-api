@@ -12,7 +12,6 @@ import (
 	identityauth0 "github.com/iwasawa/hogedd-api/internal/identity/infrastructure/auth0"
 	platformpostgres "github.com/iwasawa/hogedd-api/internal/platform/postgres"
 	userapp "github.com/iwasawa/hogedd-api/internal/user/application"
-	userauth0 "github.com/iwasawa/hogedd-api/internal/user/infrastructure/auth0"
 	userpostgres "github.com/iwasawa/hogedd-api/internal/user/infrastructure/postgres"
 )
 
@@ -29,11 +28,7 @@ func newApplication() *app.Application {
 	if err != nil {
 		panic(err)
 	}
-	accessTokenVerifier, err := identityauth0.NewVerifier(authenticationConfig)
-	if err != nil {
-		panic(err)
-	}
-	profileProvider, err := userauth0.NewProfileProvider(authenticationConfig.IssuerURL)
+	verifier, err := identityauth0.NewVerifier(authenticationConfig)
 	if err != nil {
 		panic(err)
 	}
@@ -41,20 +36,13 @@ func newApplication() *app.Application {
 	if err != nil {
 		panic(err)
 	}
-	registerUser := userapp.NewRegisterAuthenticatedUserUseCase(
-		profileProvider,
-		userpostgres.NewUserRegistrar(database),
-	)
-	getUser := userapp.NewGetCurrentUserUseCase(userpostgres.NewUserRegistrar(database))
-	profileRepository := userpostgres.NewProfileRepository(database)
+	profiles := userpostgres.NewProfileRepository(database)
 	application, err := app.New(
 		logger,
-		app.WithAccessTokenVerifier(accessTokenVerifier),
-		app.WithUserGetter(getUser),
-		app.WithUserRegistrar(registerUser),
+		app.WithAccessTokenVerifier(verifier),
 		app.WithProfileUseCases(
-			userapp.NewGetCurrentProfileUseCase(profileRepository),
-			userapp.NewUpdateCurrentProfileUseCase(profileRepository),
+			userapp.NewGetCurrentProfileUseCase(profiles),
+			userapp.NewUpdateCurrentProfileUseCase(profiles),
 		),
 	)
 	if err != nil {
@@ -63,7 +51,7 @@ func newApplication() *app.Application {
 	return application
 }
 
-// Handler はVercel Functionsから呼び出される認証済みUser登録の入口です。
+// Handler は現在Userのプロフィール取得・更新Functionの入口です。
 func Handler(w http.ResponseWriter, r *http.Request) {
-	application().UserRegistrationHandler().ServeHTTP(w, r)
+	application().UserProfileHandler().ServeHTTP(w, r)
 }

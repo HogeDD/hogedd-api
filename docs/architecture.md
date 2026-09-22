@@ -32,8 +32,8 @@ VercelはGoコードを単一のbackend Functionへ束ねる場合がありま�
 | `internal/config` | Environment parsing and validation |
 | `internal/identity` | Provider非依存の検証済み認証主体とrequest context連携 |
 | `internal/identity/infrastructure/auth0` | Auth0 JWKSを使うJWT Access Token検証adapter |
-| `internal/user/domain` | User identity、role、status、連絡先snapshotの規則 |
-| `internal/user/application` | 認証済みUser登録Use Caseと必要なport |
+| `internal/user/domain` | User identity、role、status、連絡先snapshot、本人編集プロフィールの規則 |
+| `internal/user/application` | 認証済みUser登録・取得・プロフィール更新Use Caseと必要なport |
 | `internal/user/infrastructure` | Auth0 `/userinfo`とPostgreSQLのadapter |
 | `internal/user/transport/http` | User固有のHTTP handlerとresponse DTO |
 | `internal/content/domain` | App identity, publication state, and business rules |

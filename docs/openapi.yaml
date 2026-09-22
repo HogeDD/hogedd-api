@@ -188,6 +188,71 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /v1/users/me/profile:
+    get:
+      summary: 現在のHogeDD Userのプロフィールを取得
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 登録済みプロフィール
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Userが無効
+        "404":
+          description: Userまたはプロフィールが未登録
+    head:
+      summary: 現在のプロフィールを取得可能か確認
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 取得可能
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Userが無効
+        "404":
+          description: Userまたはプロフィールが未登録
+    put:
+      summary: 現在のHogeDD Userのプロフィールを登録・更新
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [display_name]
+              properties:
+                display_name:
+                  type: string
+                  minLength: 1
+                  maxLength: 50
+      responses:
+        "200":
+          description: 保存したプロフィール
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "400":
+          description: JSONが不正
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Userが無効
+        "404":
+          description: Userが未登録
+        "422":
+          description: 表示名が不正
 components:
   securitySchemes:
     bearerAuth:
@@ -228,6 +293,15 @@ components:
         updated_at:
           type: string
           format: date-time
+    UserProfile:
+      type: object
+      additionalProperties: false
+      required: [display_name]
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 50
     PublishedApp:
       type: object
       required: [slug, title, description, status, published_at, tags, development_drive, youtube_url]

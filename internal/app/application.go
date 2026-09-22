@@ -21,6 +21,20 @@ type dependencies struct {
 	accessTokenVerifier httpapi.AccessTokenVerifier
 	userGetter          userhttp.CurrentUserGetter
 	userRegistrar       userhttp.AuthenticatedUserRegistrar
+	profileGetter       userhttp.CurrentProfileGetter
+	profileUpdater      userhttp.CurrentProfileUpdater
+}
+
+// WithProfileUseCases は現在Userのプロフィール取得・更新Use Caseを設定します。
+func WithProfileUseCases(getter userhttp.CurrentProfileGetter, updater userhttp.CurrentProfileUpdater) Option {
+	return func(dependencies *dependencies) {
+		if getter != nil {
+			dependencies.profileGetter = getter
+		}
+		if updater != nil {
+			dependencies.profileUpdater = updater
+		}
+	}
 }
 
 // WithUserGetter は認証済みUser取得endpointが使用するUse Caseを設定します。
@@ -63,6 +77,22 @@ type unavailableUserRegistrar struct{}
 
 type unavailableUserGetter struct{}
 
+type unavailableProfileUseCase struct{}
+
+func (unavailableProfileUseCase) Execute(context.Context, identity.Identity) (userapp.ProfileResult, error) {
+	return userapp.ProfileResult{}, userapp.ErrUserNotFound
+}
+
+func (unavailableProfileUseCase) ExecuteUpdate(context.Context, identity.Identity, string) (userapp.ProfileResult, error) {
+	return userapp.ProfileResult{}, userapp.ErrUserNotFound
+}
+
+type unavailableProfileUpdater struct{ unavailableProfileUseCase }
+
+func (unavailableProfileUpdater) Execute(ctx context.Context, authenticated identity.Identity, displayName string) (userapp.ProfileResult, error) {
+	return unavailableProfileUseCase{}.ExecuteUpdate(ctx, authenticated, displayName)
+}
+
 func (unavailableUserGetter) Execute(
 	context.Context,
 	identity.Identity,
@@ -87,6 +117,7 @@ type Application struct {
 	appDetailHandler        http.Handler
 	meHandler               http.Handler
 	userRegistrationHandler http.Handler
+	userProfileHandler      http.Handler
 }
 
 // New はロガーを受け取り、実行可能なApplicationを構築します。
@@ -99,6 +130,8 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		accessTokenVerifier: rejectAccessTokenVerifier{},
 		userGetter:          unavailableUserGetter{},
 		userRegistrar:       unavailableUserRegistrar{},
+		profileGetter:       unavailableProfileUseCase{},
+		profileUpdater:      unavailableProfileUpdater{},
 	}
 	for _, option := range options {
 		option(&dependencies)
@@ -109,6 +142,7 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 	healthHandler := httpapi.NewHealthHandler(healthService, responder)
 	meHandler := identityhttp.NewMeHandler(responder)
 	userMeHandler := userhttp.NewMeHandler(dependencies.userGetter, dependencies.userRegistrar, responder)
+	userProfileHandler := userhttp.NewProfileHandler(dependencies.profileGetter, dependencies.profileUpdater, responder)
 	appStore, err := infrastructure.NewSeededMemoryAppStore()
 	if err != nil {
 		return nil, err
@@ -132,6 +166,10 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		userMeHandler,
 		httpapi.AuthenticateBearer(dependencies.accessTokenVerifier, responder),
 	)
+	authenticatedUserProfileHandler := httpapi.Chain(
+		userProfileHandler,
+		httpapi.AuthenticateBearer(dependencies.accessTokenVerifier, responder),
+	)
 
 	return &Application{
 		handler: middleware.Wrap(httpapi.NewRouter(
@@ -140,14 +178,19 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 			http.HandlerFunc(appsHandler.Get),
 			authenticatedMeHandler,
 			authenticatedUserMeHandler,
+			authenticatedUserProfileHandler,
 		)),
 		healthHandler:           middleware.Wrap(healthHandler),
 		appsListHandler:         middleware.Wrap(http.HandlerFunc(appsHandler.List)),
 		appDetailHandler:        middleware.Wrap(http.HandlerFunc(appsHandler.Get)),
 		meHandler:               middleware.Wrap(authenticatedMeHandler),
 		userRegistrationHandler: middleware.Wrap(authenticatedUserMeHandler),
+		userProfileHandler:      middleware.Wrap(authenticatedUserProfileHandler),
 	}, nil
 }
+
+// UserProfileHandler はVercelの現在UserプロフィールFunctionで使用するHandlerを返します。
+func (a *Application) UserProfileHandler() http.Handler { return a.userProfileHandler }
 
 // UserRegistrationHandler はVercelの認証済みUser登録Functionで使用するHandlerを返します。
 func (a *Application) UserRegistrationHandler() http.Handler {

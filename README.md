@@ -11,6 +11,8 @@ GET /v1/apps
 GET /v1/apps/{slug}
 GET /v1/me
 PUT /v1/users/me
+GET /v1/users/me/profile
+PUT /v1/users/me/profile
 ```
 
 一覧は `{ "data": [...] }`、詳細はアプリ1件のJSONを返します。準備中または存在しないslugは`404`です。現在は`hogedd-web`の定義を元にした5件をメモリで保持し、公開済みのClean Tasksだけを返します。契約は [OpenAPI](docs/openapi.yaml)、処理のつながりは [Contentの処理の流れ](docs/content-flow.md) を参照してください。
@@ -21,6 +23,8 @@ PUT /v1/users/me
 `PUT /v1/users/me`は認証済みの主体をHogeDD Userとして冪等に登録します。emailは同じAccess TokenでAuth0 `/userinfo`から取得し、初回は`member`として`201`、登録済みならrole・statusを維持して連絡先snapshotを更新し`200`を返します。このendpointには認証環境変数と`DATABASE_URL`が必要です。
 
 `GET /v1/users/me`は検証済みの`issuer + subject`に紐づく登録済みUserを返します。未登録の場合は`404`です。読み取り時はAuth0 `/userinfo`を呼ばず、PostgreSQLの保存済みsnapshotを返します。
+
+`GET /v1/users/me/profile`と`PUT /v1/users/me/profile`は、認証情報や権限とは分離した本人編集可能なプロフィールを取得・保存します。現在の項目は1〜50文字の`display_name`だけです。
 
 ```sh
 curl -i http://localhost:8080/v1/apps
