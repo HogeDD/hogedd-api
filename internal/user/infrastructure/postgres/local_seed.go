@@ -10,8 +10,8 @@ import (
 
 const localSeedIssuer = "https://seed.hogedd.invalid/"
 
-// LocalSeedIdentity はLocal Auth0ユーザーとDB Userを紐づけるseed入力です。
-type LocalSeedIdentity struct {
+// LocalSeedUser はLocal Auth0ユーザーとDB Userを紐づける検証済みseed入力です。
+type LocalSeedUser struct {
 	// AuthIssuer はAccess Tokenのissuerと一致する値です。
 	AuthIssuer string
 	// AuthSubject はAccess Tokenのsubjectと一致する値です。
@@ -20,6 +20,10 @@ type LocalSeedIdentity struct {
 	Email string
 	// DisplayName はLocal環境で表示するプロフィール名です。
 	DisplayName string
+	// Role はHogeDD内で付与する権限です。
+	Role userdomain.Role
+	// Status はHogeDD内の利用状態です。
+	Status userdomain.Status
 }
 
 type localSeedUser struct {
@@ -82,7 +86,7 @@ func defaultLocalSeedUsers() []localSeedUser {
 }
 
 // SeedLocalDevelopment はLocal DBへ代表的なUser状態を冪等に保存します。
-func SeedLocalDevelopment(ctx context.Context, db *sql.DB, identity *LocalSeedIdentity) error {
+func SeedLocalDevelopment(ctx context.Context, db *sql.DB, additionalUsers []LocalSeedUser) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin local seed transaction: %w", err)
@@ -90,14 +94,14 @@ func SeedLocalDevelopment(ctx context.Context, db *sql.DB, identity *LocalSeedId
 	defer tx.Rollback()
 
 	users := defaultLocalSeedUsers()
-	if identity != nil {
+	for _, identity := range additionalUsers {
 		users = append(users, localSeedUser{
 			authIssuer:    identity.AuthIssuer,
 			authSubject:   identity.AuthSubject,
 			email:         identity.Email,
 			emailVerified: true,
-			role:          userdomain.RoleOwner,
-			status:        userdomain.StatusActive,
+			role:          identity.Role,
+			status:        identity.Status,
 			displayName:   identity.DisplayName,
 		})
 	}
