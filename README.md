@@ -129,7 +129,7 @@ go run ./cmd/seed
 
 owner、admin、member、disabled memberの4パターンを冪等に保存します。接続先がDockerの`db`、`localhost`、loopback以外の場合は実行を拒否します。
 
-Local Auth0ユーザーもownerとして紐づける場合は、`SEED_AUTH_ISSUER`、`SEED_AUTH_SUBJECT`、`SEED_AUTH_EMAIL`をすべて指定します。表示名は`SEED_AUTH_DISPLAY_NAME`で変更できます。
+ログイン可能なLocal Auth0ユーザーは、`SEED_USERS_FILE`で指定したversion 1のJSONから複数追加できます。実際のidentity情報はGitへ含めず、`hogedd-local`のseedディレクトリで管理します。
 
 ## Test
 

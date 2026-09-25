@@ -8,6 +8,7 @@ import (
 	"github.com/iwasawa/hogedd-api/internal/config"
 	platformpostgres "github.com/iwasawa/hogedd-api/internal/platform/postgres"
 	userpostgres "github.com/iwasawa/hogedd-api/internal/user/infrastructure/postgres"
+	userseedjson "github.com/iwasawa/hogedd-api/internal/user/infrastructure/seedjson"
 )
 
 func main() {
@@ -23,16 +24,12 @@ func main() {
 	}
 	defer database.Close()
 
-	var identity *userpostgres.LocalSeedIdentity
-	if cfg.IncludeIdentity {
-		identity = &userpostgres.LocalSeedIdentity{
-			AuthIssuer:  cfg.AuthIssuer,
-			AuthSubject: cfg.AuthSubject,
-			Email:       cfg.Email,
-			DisplayName: cfg.DisplayName,
-		}
+	users, err := userseedjson.Load(cfg.UsersFile)
+	if err != nil {
+		slog.Error("load local seed users", "error", err)
+		os.Exit(1)
 	}
-	if err := userpostgres.SeedLocalDevelopment(context.Background(), database, identity); err != nil {
+	if err := userpostgres.SeedLocalDevelopment(context.Background(), database, users); err != nil {
 		slog.Error("seed local database", "error", err)
 		os.Exit(1)
 	}
