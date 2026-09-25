@@ -75,3 +75,18 @@ func TestRoleAndStatusParsers(t *testing.T) {
 		}
 	}
 }
+
+func TestRoleAllowsManagement(t *testing.T) {
+	for _, tt := range []struct {
+		role Role
+		want bool
+	}{
+		{role: RoleOwner, want: true},
+		{role: RoleAdmin, want: true},
+		{role: RoleMember, want: false},
+	} {
+		if got := tt.role.AllowsManagement(); got != tt.want {
+			t.Errorf("%q AllowsManagement() = %v, want %v", tt.role, got, tt.want)
+		}
+	}
+}

@@ -39,6 +39,29 @@ func AuthenticateBearer(verifier AccessTokenVerifier, responder *Responder) Midd
 	}
 }
 
+// ConcealBearer はBearer Tokenを検証し、失敗を共通の404として秘匿します。
+func ConcealBearer(verifier AccessTokenVerifier, responder *Responder) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token, ok := bearerToken(r.Header.Values("Authorization"))
+			if !ok {
+				responder.ConcealedNotFound(w, r, "missing_or_malformed_bearer_token", nil)
+				return
+			}
+
+			authenticated, err := verifier.Verify(r.Context(), token)
+			if err != nil {
+				responder.ConcealedNotFound(w, r, "invalid_bearer_token", err)
+				return
+			}
+
+			ctx := identity.NewContext(r.Context(), authenticated)
+			ctx = context.WithValue(ctx, accessTokenContextKey{}, token)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
 // AccessTokenFromContext はBearer認証で検証済みのraw Access Tokenを返します。
 // Tokenを必要とするサーバー間通信だけで使用し、responseやlogへ出力してはいけません。
 func AccessTokenFromContext(ctx context.Context) (string, bool) {

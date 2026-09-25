@@ -29,3 +29,8 @@ func ParseRole(value string) (Role, error) {
 func (r Role) String() string {
 	return string(r)
 }
+
+// AllowsManagement は運営機能を利用できるRoleかを返します。
+func (r Role) AllowsManagement() bool {
+	return r == RoleOwner || r == RoleAdmin
+}

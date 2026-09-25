@@ -13,6 +13,7 @@ GET /v1/me
 PUT /v1/users/me
 GET /v1/users/me/profile
 PUT /v1/users/me/profile
+GET /v1/management/me
 ```
 
 一覧は `{ "data": [...] }`、詳細はアプリ1件のJSONを返します。準備中または存在しないslugは`404`です。現在は`hogedd-web`の定義を元にした5件をメモリで保持し、公開済みのClean Tasksだけを返します。契約は [OpenAPI](docs/openapi.yaml)、処理のつながりは [Contentの処理の流れ](docs/content-flow.md) を参照してください。
@@ -25,6 +26,9 @@ PUT /v1/users/me/profile
 `GET /v1/users/me`は検証済みの`issuer + subject`に紐づく登録済みUserを返します。未登録の場合は`404`です。読み取り時はAuth0 `/userinfo`を呼ばず、PostgreSQLの保存済みsnapshotを返します。
 
 `GET /v1/users/me/profile`と`PUT /v1/users/me/profile`は、認証情報や権限とは分離した本人編集可能なプロフィールを取得・保存します。現在の項目は1〜50文字の`display_name`だけです。
+
+`GET /v1/management/me`は`active`な`owner`・`admin`だけが利用できます。管理境界の存在を秘匿するため、tokenなし、不正token、未登録、`member`、`disabled`、認可確認失敗は同じ`404 not_found`を返します。内部ログでは拒否理由を区別します。
+roleの付与・剥奪と緊急停止は、管理GUIを導入するまで[User権限の運用](docs/user-access-operations.md)に従います。
 
 ```sh
 curl -i http://localhost:8080/v1/apps
@@ -145,6 +149,6 @@ vercel
 vercel --prod
 ```
 
-公開APIの `/health` と `/v1/apps` は `vercel.json` により、Vercel内部のrouteへrewriteされます。VercelがGoコードを単一のbackend Functionとして束ねる場合にも対応するため、共通Routerがrewrite後の内部routeを処理します。`/v1/apps/{slug}` のslugはquery parameterで内部routeへ渡し、Routerがpath valueへ変換します。利用者に内部の `/api` prefixは見せません。
+公開APIの `/health`、`/v1/apps`、`/v1/management/me`などは `vercel.json` により、Vercel内部のrouteへrewriteされます。VercelがGoコードを単一のbackend Functionとして束ねる場合にも対応するため、共通Routerがrewrite後の内部routeを処理します。`/v1/apps/{slug}` のslugはquery parameterで内部routeへ渡し、Routerがpath valueへ変換します。利用者に内部の `/api` prefixは見せません。
 
 `cmd/server` と `internal/platform/httpserver` はローカル実行専用です。VercelではTCPポートを待ち受けず、Functionの `Handler` がリクエストごとに呼び出されます。

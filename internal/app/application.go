@@ -18,11 +18,12 @@ import (
 )
 
 type dependencies struct {
-	accessTokenVerifier httpapi.AccessTokenVerifier
-	userGetter          userhttp.CurrentUserGetter
-	userRegistrar       userhttp.AuthenticatedUserRegistrar
-	profileGetter       userhttp.CurrentProfileGetter
-	profileUpdater      userhttp.CurrentProfileUpdater
+	accessTokenVerifier  httpapi.AccessTokenVerifier
+	userGetter           userhttp.CurrentUserGetter
+	userRegistrar        userhttp.AuthenticatedUserRegistrar
+	profileGetter        userhttp.CurrentProfileGetter
+	profileUpdater       userhttp.CurrentProfileUpdater
+	managementUserGetter userhttp.ManagementUserGetter
 }
 
 // WithProfileUseCases は現在Userのプロフィール取得・更新Use Caseを設定します。
@@ -42,6 +43,15 @@ func WithUserGetter(getter userhttp.CurrentUserGetter) Option {
 	return func(dependencies *dependencies) {
 		if getter != nil {
 			dependencies.userGetter = getter
+		}
+	}
+}
+
+// WithManagementUserGetter は運営境界が使用する認可Use Caseを設定します。
+func WithManagementUserGetter(getter userhttp.ManagementUserGetter) Option {
+	return func(dependencies *dependencies) {
+		if getter != nil {
+			dependencies.managementUserGetter = getter
 		}
 	}
 }
@@ -77,6 +87,8 @@ type unavailableUserRegistrar struct{}
 
 type unavailableUserGetter struct{}
 
+type unavailableManagementUserGetter struct{}
+
 type unavailableProfileUseCase struct{}
 
 func (unavailableProfileUseCase) Execute(context.Context, identity.Identity) (userapp.ProfileResult, error) {
@@ -100,6 +112,13 @@ func (unavailableUserGetter) Execute(
 	return userapp.RegisteredUserResult{}, userapp.ErrRegistrationFailed
 }
 
+func (unavailableManagementUserGetter) Execute(
+	context.Context,
+	identity.Identity,
+) (userapp.ManagementUserResult, error) {
+	return userapp.ManagementUserResult{}, userapp.ErrManagementUserNotFound
+}
+
 func (unavailableUserRegistrar) Execute(
 	context.Context,
 	identity.Identity,
@@ -111,13 +130,15 @@ func (unavailableUserRegistrar) Execute(
 // Application はアプリケーション全体の依存関係を保持するコンポジションルートです。
 // 具体的な実装の組み立てをこの型へ集約し、各機能から依存生成の責務を分離します。
 type Application struct {
-	handler                 http.Handler
-	healthHandler           http.Handler
-	appsListHandler         http.Handler
-	appDetailHandler        http.Handler
-	meHandler               http.Handler
-	userRegistrationHandler http.Handler
-	userProfileHandler      http.Handler
+	handler                   http.Handler
+	healthHandler             http.Handler
+	appsListHandler           http.Handler
+	appDetailHandler          http.Handler
+	meHandler                 http.Handler
+	userRegistrationHandler   http.Handler
+	userProfileHandler        http.Handler
+	managementUserHandler     http.Handler
+	managementNotFoundHandler http.Handler
 }
 
 // New はロガーを受け取り、実行可能なApplicationを構築します。
@@ -127,11 +148,12 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		logger = slog.Default()
 	}
 	dependencies := dependencies{
-		accessTokenVerifier: rejectAccessTokenVerifier{},
-		userGetter:          unavailableUserGetter{},
-		userRegistrar:       unavailableUserRegistrar{},
-		profileGetter:       unavailableProfileUseCase{},
-		profileUpdater:      unavailableProfileUpdater{},
+		accessTokenVerifier:  rejectAccessTokenVerifier{},
+		userGetter:           unavailableUserGetter{},
+		userRegistrar:        unavailableUserRegistrar{},
+		profileGetter:        unavailableProfileUseCase{},
+		profileUpdater:       unavailableProfileUpdater{},
+		managementUserGetter: unavailableManagementUserGetter{},
 	}
 	for _, option := range options {
 		option(&dependencies)
@@ -143,6 +165,8 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 	meHandler := identityhttp.NewMeHandler(responder)
 	userMeHandler := userhttp.NewMeHandler(dependencies.userGetter, dependencies.userRegistrar, responder)
 	userProfileHandler := userhttp.NewProfileHandler(dependencies.profileGetter, dependencies.profileUpdater, responder)
+	managementUserHandler := userhttp.NewManagementHandler(dependencies.managementUserGetter, responder)
+	managementNotFoundHandler := responder.NotFoundHandler()
 	appStore, err := infrastructure.NewSeededMemoryAppStore()
 	if err != nil {
 		return nil, err
@@ -170,6 +194,10 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		userProfileHandler,
 		httpapi.AuthenticateBearer(dependencies.accessTokenVerifier, responder),
 	)
+	concealedManagementUserHandler := httpapi.Chain(
+		managementUserHandler,
+		httpapi.ConcealBearer(dependencies.accessTokenVerifier, responder),
+	)
 
 	return &Application{
 		handler: middleware.Wrap(httpapi.NewRouter(
@@ -179,15 +207,25 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 			authenticatedMeHandler,
 			authenticatedUserMeHandler,
 			authenticatedUserProfileHandler,
+			concealedManagementUserHandler,
+			managementNotFoundHandler,
 		)),
-		healthHandler:           middleware.Wrap(healthHandler),
-		appsListHandler:         middleware.Wrap(http.HandlerFunc(appsHandler.List)),
-		appDetailHandler:        middleware.Wrap(http.HandlerFunc(appsHandler.Get)),
-		meHandler:               middleware.Wrap(authenticatedMeHandler),
-		userRegistrationHandler: middleware.Wrap(authenticatedUserMeHandler),
-		userProfileHandler:      middleware.Wrap(authenticatedUserProfileHandler),
+		healthHandler:             middleware.Wrap(healthHandler),
+		appsListHandler:           middleware.Wrap(http.HandlerFunc(appsHandler.List)),
+		appDetailHandler:          middleware.Wrap(http.HandlerFunc(appsHandler.Get)),
+		meHandler:                 middleware.Wrap(authenticatedMeHandler),
+		userRegistrationHandler:   middleware.Wrap(authenticatedUserMeHandler),
+		userProfileHandler:        middleware.Wrap(authenticatedUserProfileHandler),
+		managementUserHandler:     middleware.Wrap(concealedManagementUserHandler),
+		managementNotFoundHandler: middleware.Wrap(managementNotFoundHandler),
 	}, nil
 }
+
+// ManagementUserHandler はVercelの運営User確認Functionで使用するHandlerを返します。
+func (a *Application) ManagementUserHandler() http.Handler { return a.managementUserHandler }
+
+// ManagementNotFoundHandler は未知の運営routeへ秘匿404を返します。
+func (a *Application) ManagementNotFoundHandler() http.Handler { return a.managementNotFoundHandler }
 
 // UserProfileHandler はVercelの現在UserプロフィールFunctionで使用するHandlerを返します。
 func (a *Application) UserProfileHandler() http.Handler { return a.userProfileHandler }

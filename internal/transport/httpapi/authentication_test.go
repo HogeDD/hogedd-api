@@ -90,3 +90,27 @@ func TestAuthenticateBearerRejectsInvalidCredentials(t *testing.T) {
 		})
 	}
 }
+
+func TestConcealBearerReturnsNotFoundWithoutAuthenticationChallenge(t *testing.T) {
+	responder := NewResponder(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	verifier := accessTokenVerifierStub{wantToken: "valid-token", err: errors.New("invalid token")}
+	for _, headers := range [][]string{nil, {"Bearer invalid-token"}, {"Bearer valid-token"}} {
+		handler := ConcealBearer(verifier, responder)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			t.Fatal("protected handler was called")
+		}))
+		req := httptest.NewRequest(http.MethodGet, "/v1/management/me", nil)
+		for _, value := range headers {
+			req.Header.Add("Authorization", value)
+		}
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+		}
+		if got := rec.Header().Get("WWW-Authenticate"); got != "" {
+			t.Errorf("WWW-Authenticate = %q, want empty", got)
+		}
+	}
+}
