@@ -57,15 +57,17 @@ func main() {
 			logger.Error("build Auth0 profile provider", "error", err)
 			os.Exit(1)
 		}
+		userRepository := userpostgres.NewUserRegistrar(database)
 		registerUser := userapp.NewRegisterAuthenticatedUserUseCase(
 			profileProvider,
-			userpostgres.NewUserRegistrar(database),
+			userRepository,
 		)
-		getUser := userapp.NewGetCurrentUserUseCase(userpostgres.NewUserRegistrar(database))
+		getUser := userapp.NewGetCurrentUserUseCase(userRepository)
 		profileRepository := userpostgres.NewProfileRepository(database)
 		applicationOptions = append(
 			applicationOptions,
 			app.WithUserGetter(getUser),
+			app.WithManagementUserGetter(userapp.NewGetManagementUserUseCase(userRepository)),
 			app.WithUserRegistrar(registerUser),
 			app.WithProfileUseCases(
 				userapp.NewGetCurrentProfileUseCase(profileRepository),

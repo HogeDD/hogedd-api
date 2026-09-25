@@ -74,6 +74,10 @@ func TestApplicationRoutes(t *testing.T) {
 		{path: "/api/users/me", wantStatus: http.StatusUnauthorized},
 		{path: "/v1/users/me/profile", wantStatus: http.StatusUnauthorized},
 		{path: "/api/users/me/profile", wantStatus: http.StatusUnauthorized},
+		{path: "/v1/management/me", wantStatus: http.StatusNotFound},
+		{path: "/api/management/me", wantStatus: http.StatusNotFound},
+		{path: "/v1/management/unknown", wantStatus: http.StatusNotFound},
+		{path: "/api/management/unknown", wantStatus: http.StatusNotFound},
 	}
 
 	for _, tt := range tests {
@@ -89,6 +93,36 @@ func TestApplicationRoutes(t *testing.T) {
 				t.Error("X-Request-ID is empty")
 			}
 		})
+	}
+}
+
+type managementUserGetterStub struct {
+	result userapp.ManagementUserResult
+	err    error
+}
+
+func (s managementUserGetterStub) Execute(context.Context, identity.Identity) (userapp.ManagementUserResult, error) {
+	return s.result, s.err
+}
+
+func TestApplicationConcealsAndAllowsManagementRoute(t *testing.T) {
+	authenticated, _ := identity.New("https://hogedd.jp.auth0.com/", "auth0|owner")
+	application, err := New(
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		WithAccessTokenVerifier(accessTokenVerifierStub{identity: authenticated}),
+		WithManagementUserGetter(managementUserGetterStub{result: userapp.ManagementUserResult{ID: "user-1", Role: "owner"}}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/v1/management/me", nil)
+	request.Header.Set("Authorization", "Bearer test-token")
+	recorder := httptest.NewRecorder()
+
+	application.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 }
 

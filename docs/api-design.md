@@ -56,6 +56,8 @@ The source checklist transcribed from the book is kept in [Web API: The Good Par
 - `500 Internal Server Error`: unexpected server failure without exposing internal details.
 - `503 Service Unavailable`: temporary inability to serve, including failed readiness.
 
+`/v1/management/*` is a deliberately concealed, first-party management boundary. Missing or invalid credentials, unregistered users, inactive users, insufficient roles, and failures before authorization is established all return the same `404 Not Found` contract without `WWW-Authenticate`. The actual reason is recorded only in structured server logs. Authorized requests continue to use the normal status-code semantics.
+
 Do not return `200 OK` with an error encoded only in the response body.
 
 ## JSON conventions

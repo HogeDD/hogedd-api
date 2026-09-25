@@ -62,3 +62,20 @@ func (r *Responder) InternalError(w http.ResponseWriter, req *http.Request, mess
 	)
 	r.Error(w, req, http.StatusInternalServerError, "internal_error", "internal server error")
 }
+
+// ConcealedNotFound は内部理由を記録し、外部には共通の404だけを返します。
+func (r *Responder) ConcealedNotFound(w http.ResponseWriter, req *http.Request, reason string, err error) {
+	r.logger.WarnContext(req.Context(), "concealed resource access",
+		"reason", reason,
+		"error", err,
+		"request_id", RequestIDFromContext(req.Context()),
+	)
+	r.Error(w, req, http.StatusNotFound, "not_found", "resource not found")
+}
+
+// NotFoundHandler は存在しないrouteへ共通の404 contractを返します。
+func (r *Responder) NotFoundHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		r.Error(w, req, http.StatusNotFound, "not_found", "resource not found")
+	})
+}
