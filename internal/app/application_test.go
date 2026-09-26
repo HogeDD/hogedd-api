@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	contentapp "github.com/iwasawa/hogedd-api/internal/content/application"
 	"github.com/iwasawa/hogedd-api/internal/identity"
 	userapp "github.com/iwasawa/hogedd-api/internal/user/application"
 )
@@ -101,8 +102,40 @@ type managementUserGetterStub struct {
 	err    error
 }
 
+type managementAppsListerStub struct{}
+
+func (managementAppsListerStub) Execute(context.Context) ([]contentapp.ManagementAppResult, error) {
+	return []contentapp.ManagementAppResult{{Slug: "draft-app", Title: "Draft", Description: "Description", Status: "preparing", Tags: []string{}}}, nil
+}
+
+type preparingAppCreatorStub struct{}
+
+func (preparingAppCreatorStub) Execute(context.Context, string, string, string, []string) (contentapp.ManagementAppResult, error) {
+	return contentapp.ManagementAppResult{}, nil
+}
+
 func (s managementUserGetterStub) Execute(context.Context, identity.Identity) (userapp.ManagementUserResult, error) {
 	return s.result, s.err
+}
+
+func TestApplicationRoutesAuthorizedManagementApps(t *testing.T) {
+	authenticated, _ := identity.New("https://hogedd.jp.auth0.com/", "auth0|owner")
+	application, err := New(
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		WithAccessTokenVerifier(accessTokenVerifierStub{identity: authenticated}),
+		WithManagementUserGetter(managementUserGetterStub{result: userapp.ManagementUserResult{ID: "user-1", Role: "owner"}}),
+		WithManagementAppUseCases(managementAppsListerStub{}, preparingAppCreatorStub{}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/v1/management/apps", nil)
+	request.Header.Set("Authorization", "Bearer test-token")
+	recorder := httptest.NewRecorder()
+	application.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status/body = %d/%s", recorder.Code, recorder.Body.String())
+	}
 }
 
 func TestApplicationConcealsAndAllowsManagementRoute(t *testing.T) {

@@ -37,8 +37,8 @@ VercelはGoコードを単一のbackend Functionへ束ねる場合がありま�
 | `internal/user/infrastructure` | Auth0 `/userinfo`とPostgreSQLのadapter |
 | `internal/user/transport/http` | User固有のHTTP handlerとresponse DTO |
 | `internal/content/domain` | App identity, publication state, and business rules |
-| `internal/content/application` | Published-App use cases and their required interfaces |
-| `internal/content/infrastructure` | Seeded in-memory App source |
+| `internal/content/application` | 公開・運営AppのUse Caseと必要なport |
+| `internal/content/infrastructure` | 公開用memory sourceと運営用PostgreSQL adapter |
 | `internal/health` | Transport-independent operational health capability |
 | `internal/content/transport/http` | Content固有のHTTP handlersとrequest/response DTO |
 | `internal/transport/httpapi` | Context共通のrouting、response、middleware |

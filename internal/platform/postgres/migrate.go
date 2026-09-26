@@ -56,5 +56,12 @@ func verifySchema(ctx context.Context, db *sql.DB) error {
 	if !profilesExists {
 		return fmt.Errorf("verify postgres schema: user_profiles table is missing")
 	}
+	var contentAppsExists bool
+	if err := db.QueryRowContext(ctx, "SELECT to_regclass('public.content_apps') IS NOT NULL").Scan(&contentAppsExists); err != nil {
+		return fmt.Errorf("verify postgres schema: %w", err)
+	}
+	if !contentAppsExists {
+		return fmt.Errorf("verify postgres schema: content_apps table is missing")
+	}
 	return nil
 }
