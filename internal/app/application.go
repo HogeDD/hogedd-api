@@ -26,6 +26,20 @@ type dependencies struct {
 	managementUserGetter userhttp.ManagementUserGetter
 	managementAppsLister contenthttp.ManagementAppsLister
 	preparingAppCreator  contenthttp.PreparingAppCreator
+	managementAppGetter  contenthttp.ManagementAppGetter
+	managementAppUpdater contenthttp.ManagementAppUpdater
+}
+
+// WithManagementAppDetailUseCases は運営App詳細の取得・更新Use Caseを設定します。
+func WithManagementAppDetailUseCases(getter contenthttp.ManagementAppGetter, updater contenthttp.ManagementAppUpdater) Option {
+	return func(dependencies *dependencies) {
+		if getter != nil {
+			dependencies.managementAppGetter = getter
+		}
+		if updater != nil {
+			dependencies.managementAppUpdater = updater
+		}
+	}
 }
 
 // WithManagementAppUseCases は運営App一覧・作成Use Caseを設定します。
@@ -115,6 +129,17 @@ func (unavailableManagementApps) ExecuteCreate(context.Context, string, string, 
 
 type unavailablePreparingAppCreator struct{ unavailableManagementApps }
 
+type unavailableManagementAppGetter struct{ unavailableManagementApps }
+type unavailableManagementAppUpdater struct{ unavailableManagementApps }
+
+func (unavailableManagementAppGetter) Execute(context.Context, string) (application.ManagementAppResult, error) {
+	return application.ManagementAppResult{}, errors.New("management app is not configured")
+}
+
+func (unavailableManagementAppUpdater) Execute(context.Context, string, string, string, []string, int64) (application.ManagementAppResult, error) {
+	return application.ManagementAppResult{}, errors.New("management app is not configured")
+}
+
 func (unavailablePreparingAppCreator) Execute(ctx context.Context, slug, title, description string, tags []string) (application.ManagementAppResult, error) {
 	return unavailableManagementApps{}.ExecuteCreate(ctx, slug, title, description, tags)
 }
@@ -167,6 +192,7 @@ type Application struct {
 	userProfileHandler        http.Handler
 	managementUserHandler     http.Handler
 	managementAppsHandler     http.Handler
+	managementAppHandler      http.Handler
 	managementNotFoundHandler http.Handler
 }
 
@@ -185,6 +211,8 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		managementUserGetter: unavailableManagementUserGetter{},
 		managementAppsLister: unavailableManagementApps{},
 		preparingAppCreator:  unavailablePreparingAppCreator{},
+		managementAppGetter:  unavailableManagementAppGetter{},
+		managementAppUpdater: unavailableManagementAppUpdater{},
 	}
 	for _, option := range options {
 		option(&dependencies)
@@ -198,6 +226,7 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 	userProfileHandler := userhttp.NewProfileHandler(dependencies.profileGetter, dependencies.profileUpdater, responder)
 	managementUserHandler := userhttp.NewManagementHandler(dependencies.managementUserGetter, responder)
 	managementAppsHandler := contenthttp.NewManagementAppsHandler(dependencies.managementUserGetter, dependencies.managementAppsLister, dependencies.preparingAppCreator, responder)
+	managementAppHandler := contenthttp.NewManagementAppHandler(dependencies.managementUserGetter, dependencies.managementAppGetter, dependencies.managementAppUpdater, responder)
 	managementNotFoundHandler := responder.NotFoundHandler()
 	appStore, err := infrastructure.NewSeededMemoryAppStore()
 	if err != nil {
@@ -231,6 +260,7 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		httpapi.ConcealBearer(dependencies.accessTokenVerifier, responder),
 	)
 	concealedManagementAppsHandler := httpapi.Chain(managementAppsHandler, httpapi.ConcealBearer(dependencies.accessTokenVerifier, responder))
+	concealedManagementAppHandler := httpapi.Chain(managementAppHandler, httpapi.ConcealBearer(dependencies.accessTokenVerifier, responder))
 
 	return &Application{
 		handler: middleware.Wrap(httpapi.NewRouter(
@@ -242,6 +272,7 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 			authenticatedUserProfileHandler,
 			concealedManagementUserHandler,
 			concealedManagementAppsHandler,
+			concealedManagementAppHandler,
 			managementNotFoundHandler,
 		)),
 		healthHandler:             middleware.Wrap(healthHandler),
@@ -252,12 +283,16 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		userProfileHandler:        middleware.Wrap(authenticatedUserProfileHandler),
 		managementUserHandler:     middleware.Wrap(concealedManagementUserHandler),
 		managementAppsHandler:     middleware.Wrap(concealedManagementAppsHandler),
+		managementAppHandler:      middleware.Wrap(concealedManagementAppHandler),
 		managementNotFoundHandler: middleware.Wrap(managementNotFoundHandler),
 	}, nil
 }
 
 // ManagementAppsHandler はVercelの運営App一覧・作成Functionで使用するHandlerを返します。
 func (a *Application) ManagementAppsHandler() http.Handler { return a.managementAppsHandler }
+
+// ManagementAppHandler はVercelの運営App詳細Functionで使用するHandlerを返します。
+func (a *Application) ManagementAppHandler() http.Handler { return a.managementAppHandler }
 
 // ManagementUserHandler はVercelの運営User確認Functionで使用するHandlerを返します。
 func (a *Application) ManagementUserHandler() http.Handler { return a.managementUserHandler }

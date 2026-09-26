@@ -38,6 +38,23 @@ func TestNewPreparingApp(t *testing.T) {
 	}
 }
 
+func TestUpdateDraftDetails(t *testing.T) {
+	slug, _ := NewSlug("draft-app")
+	app, _ := NewPreparingApp(slug, "Draft", "Description", nil)
+	if err := app.UpdateDraftDetails(" Updated ", " New description ", []string{"Go"}); err != nil {
+		t.Fatal(err)
+	}
+	if app.Title() != "Updated" || app.Description() != "New description" {
+		t.Fatalf("app = %q/%q", app.Title(), app.Description())
+	}
+	if err := app.Publish(time.Now(), "学習DD", "https://youtu.be/video"); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.UpdateDraftDetails("Again", "Description", nil); err != ErrPublishedAppCannotBeEdited {
+		t.Fatalf("UpdateDraftDetails() error = %v", err)
+	}
+}
+
 func TestNewPreparingAppRejectsMissingText(t *testing.T) {
 	t.Parallel()
 

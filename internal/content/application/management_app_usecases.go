@@ -10,6 +10,12 @@ import (
 // ErrAppAlreadyExists は同じslugのAppが既に存在することを表します。
 var ErrAppAlreadyExists = errors.New("app already exists")
 
+// ErrManagementAppNotFound は管理対象Appが存在しないことを表します。
+var ErrManagementAppNotFound = errors.New("management app not found")
+
+// ErrAppVersionConflict は取得後にAppが別更新されていることを表します。
+var ErrAppVersionConflict = errors.New("app version conflict")
+
 // AppCreator はApp作成に必要な永続化portです。
 type AppCreator interface {
 	Create(context.Context, *domain.App) error
@@ -22,6 +28,75 @@ type ManagementAppResult struct {
 	Description string   `json:"description"`
 	Status      string   `json:"status"`
 	Tags        []string `json:"tags"`
+	Version     int64    `json:"version,omitempty"`
+}
+
+// ManagementAppEditor は管理用Appの取得と楽観的ロック更新に必要なportです。
+type ManagementAppEditor interface {
+	FindForManagement(context.Context, domain.Slug) (*domain.App, int64, bool, error)
+	UpdateDraft(context.Context, *domain.App, int64) (int64, error)
+}
+
+// GetManagementAppUseCase は管理用App詳細を取得します。
+type GetManagementAppUseCase struct{ editor ManagementAppEditor }
+
+// NewGetManagementAppUseCase は管理用取得portからUse Caseを構築します。
+func NewGetManagementAppUseCase(editor ManagementAppEditor) *GetManagementAppUseCase {
+	return &GetManagementAppUseCase{editor: editor}
+}
+
+// Execute はSlugを検証し、存在するAppと現在versionを返します。
+func (uc *GetManagementAppUseCase) Execute(ctx context.Context, value string) (ManagementAppResult, error) {
+	slug, err := domain.NewSlug(value)
+	if err != nil {
+		return ManagementAppResult{}, ErrManagementAppNotFound
+	}
+	app, version, found, err := uc.editor.FindForManagement(ctx, slug)
+	if err != nil {
+		return ManagementAppResult{}, err
+	}
+	if !found {
+		return ManagementAppResult{}, ErrManagementAppNotFound
+	}
+	result := toManagementAppResult(app)
+	result.Version = version
+	return result, nil
+}
+
+// UpdateManagementAppUseCase は公開準備中Appの表示情報を更新します。
+type UpdateManagementAppUseCase struct{ editor ManagementAppEditor }
+
+// NewUpdateManagementAppUseCase は管理用更新portからUse Caseを構築します。
+func NewUpdateManagementAppUseCase(editor ManagementAppEditor) *UpdateManagementAppUseCase {
+	return &UpdateManagementAppUseCase{editor: editor}
+}
+
+// Execute は現在versionを照合し、Draft情報を更新します。
+func (uc *UpdateManagementAppUseCase) Execute(ctx context.Context, value, title, description string, tags []string, expectedVersion int64) (ManagementAppResult, error) {
+	if expectedVersion < 1 {
+		return ManagementAppResult{}, ErrAppVersionConflict
+	}
+	slug, err := domain.NewSlug(value)
+	if err != nil {
+		return ManagementAppResult{}, ErrManagementAppNotFound
+	}
+	app, _, found, err := uc.editor.FindForManagement(ctx, slug)
+	if err != nil {
+		return ManagementAppResult{}, err
+	}
+	if !found {
+		return ManagementAppResult{}, ErrManagementAppNotFound
+	}
+	if err := app.UpdateDraftDetails(title, description, tags); err != nil {
+		return ManagementAppResult{}, err
+	}
+	version, err := uc.editor.UpdateDraft(ctx, app, expectedVersion)
+	if err != nil {
+		return ManagementAppResult{}, err
+	}
+	result := toManagementAppResult(app)
+	result.Version = version
+	return result, nil
 }
 
 // CreatePreparingAppUseCase は公開準備中Appを作成します。

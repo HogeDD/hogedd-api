@@ -36,6 +36,8 @@ var (
 	ErrDevelopmentDriveRequired = errors.New("development drive is required")
 	// ErrInvalidYouTubeURL は紹介動画として利用できないURLであることを表します。
 	ErrInvalidYouTubeURL = errors.New("invalid YouTube URL")
+	// ErrPublishedAppCannotBeEdited は公開済みAppをDraft編集しようとしたことを表します。
+	ErrPublishedAppCannotBeEdited = errors.New("published app cannot be edited")
 )
 
 // App はHogeDDが公開するアプリと紹介動画の組み合わせを表します。
@@ -49,6 +51,21 @@ type App struct {
 	publishedAt       time.Time
 	developmentDrive  string
 	youTubeURL        string
+}
+
+// UpdateDraftDetails は公開準備中Appの表示情報を検証して更新します。
+func (a *App) UpdateDraftDetails(title, description string, tags []string) error {
+	if a.publicationStatus != PublicationStatusPreparing {
+		return ErrPublishedAppCannotBeEdited
+	}
+	updated, err := NewPreparingApp(a.slug, title, description, tags)
+	if err != nil {
+		return err
+	}
+	a.title = updated.title
+	a.description = updated.description
+	a.tags = updated.tags
+	return nil
 }
 
 // NewPreparingApp は公開準備中のAppを生成します。
