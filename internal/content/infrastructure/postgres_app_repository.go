@@ -29,8 +29,8 @@ func (r *PostgresAppRepository) FindBySlug(ctx context.Context, slug domain.Slug
 // Create は公開準備中Appを作成し、slug重複を業務エラーへ変換します。
 func (r *PostgresAppRepository) Create(ctx context.Context, app *domain.App) error {
 	_, err := r.db.ExecContext(ctx, `
-INSERT INTO content_apps (slug, title, description, tags, publication_status)
-VALUES ($1, $2, $3, $4, $5)`, app.Slug().String(), app.Title(), app.Description(), app.Tags(), string(app.PublicationStatus()))
+INSERT INTO content_apps (id, slug, title, description, tags, publication_status)
+VALUES ($1, $2, $3, $4, $5, $6)`, app.ID().String(), app.Slug().String(), app.Title(), app.Description(), app.Tags(), string(app.PublicationStatus()))
 	var postgresError *pgconn.PgError
 	if errors.As(err, &postgresError) && postgresError.Code == "23505" {
 		return application.ErrAppAlreadyExists
@@ -44,7 +44,7 @@ VALUES ($1, $2, $3, $4, $5)`, app.Slug().String(), app.Title(), app.Description(
 // List は管理用に公開状態を問わず全Appを更新日時の降順で返します。
 func (r *PostgresAppRepository) List(ctx context.Context) ([]*domain.App, error) {
 	rows, err := r.db.QueryContext(ctx, `
-SELECT slug, title, description, tags, publication_status, published_at, development_drive, youtube_url
+SELECT id, slug, title, description, tags, publication_status, published_at, development_drive, youtube_url
 FROM content_apps
 ORDER BY updated_at DESC, slug ASC`)
 	if err != nil {
@@ -53,11 +53,11 @@ ORDER BY updated_at DESC, slug ASC`)
 	defer rows.Close()
 	apps := make([]*domain.App, 0)
 	for rows.Next() {
-		var slugValue, title, description, statusValue string
+		var idValue, slugValue, title, description, statusValue string
 		var tags []string
 		var publishedAt sql.NullTime
 		var developmentDrive, youtubeURL sql.NullString
-		if err := rows.Scan(&slugValue, &title, &description, &tags, &statusValue, &publishedAt, &developmentDrive, &youtubeURL); err != nil {
+		if err := rows.Scan(&idValue, &slugValue, &title, &description, &tags, &statusValue, &publishedAt, &developmentDrive, &youtubeURL); err != nil {
 			return nil, fmt.Errorf("scan content app: %w", err)
 		}
 		slug, err := domain.NewSlug(slugValue)
@@ -72,7 +72,11 @@ ORDER BY updated_at DESC, slug ASC`)
 		if publishedAt.Valid {
 			publicationTime = publishedAt.Time
 		}
-		app, err := domain.RestoreApp(slug, title, description, tags, status, publicationTime, developmentDrive.String, youtubeURL.String)
+		id, err := domain.RestoreAppID(idValue)
+		if err != nil {
+			return nil, fmt.Errorf("restore content app id: %w", err)
+		}
+		app, err := domain.RestoreAppWithID(id, slug, title, description, tags, status, publicationTime, developmentDrive.String, youtubeURL.String)
 		if err != nil {
 			return nil, fmt.Errorf("restore content app %q: %w", slugValue, err)
 		}
@@ -86,18 +90,18 @@ ORDER BY updated_at DESC, slug ASC`)
 
 // ListRecommended は公開済みでおすすめ順位が設定されたAppを順位順に返します。
 func (r *PostgresAppRepository) ListRecommended(ctx context.Context) ([]*domain.App, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT slug, title, description, tags, publication_status, published_at, development_drive, youtube_url FROM content_apps WHERE publication_status = 'published' AND recommended_rank IS NOT NULL ORDER BY recommended_rank ASC, slug ASC`)
+	rows, err := r.db.QueryContext(ctx, `SELECT id, slug, title, description, tags, publication_status, published_at, development_drive, youtube_url FROM content_apps WHERE publication_status = 'published' AND recommended_rank IS NOT NULL ORDER BY recommended_rank ASC, slug ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("list recommended content apps: %w", err)
 	}
 	defer rows.Close()
 	apps := make([]*domain.App, 0)
 	for rows.Next() {
-		var slugValue, title, description, statusValue string
+		var idValue, slugValue, title, description, statusValue string
 		var tags []string
 		var publishedAt sql.NullTime
 		var developmentDrive, youtubeURL sql.NullString
-		if err := rows.Scan(&slugValue, &title, &description, &tags, &statusValue, &publishedAt, &developmentDrive, &youtubeURL); err != nil {
+		if err := rows.Scan(&idValue, &slugValue, &title, &description, &tags, &statusValue, &publishedAt, &developmentDrive, &youtubeURL); err != nil {
 			return nil, fmt.Errorf("scan recommended content app: %w", err)
 		}
 		slug, err := domain.NewSlug(slugValue)
@@ -112,7 +116,11 @@ func (r *PostgresAppRepository) ListRecommended(ctx context.Context) ([]*domain.
 		if publishedAt.Valid {
 			published = publishedAt.Time
 		}
-		app, err := domain.RestoreApp(slug, title, description, tags, status, published, developmentDrive.String, youtubeURL.String)
+		id, err := domain.RestoreAppID(idValue)
+		if err != nil {
+			return nil, err
+		}
+		app, err := domain.RestoreAppWithID(id, slug, title, description, tags, status, published, developmentDrive.String, youtubeURL.String)
 		if err != nil {
 			return nil, err
 		}
@@ -126,14 +134,14 @@ func (r *PostgresAppRepository) ListRecommended(ctx context.Context) ([]*domain.
 
 // FindForManagement は管理用に公開状態を問わずAppとversionを取得します。
 func (r *PostgresAppRepository) FindForManagement(ctx context.Context, slug domain.Slug) (*domain.App, int64, bool, error) {
-	var title, description, statusValue string
+	var idValue, title, description, statusValue string
 	var tags []string
 	var publishedAt sql.NullTime
 	var developmentDrive, youtubeURL sql.NullString
 	var version int64
 	err := r.db.QueryRowContext(ctx, `
-SELECT title, description, tags, publication_status, published_at, development_drive, youtube_url, version
-FROM content_apps WHERE slug = $1`, slug.String()).Scan(&title, &description, &tags, &statusValue, &publishedAt, &developmentDrive, &youtubeURL, &version)
+SELECT id, title, description, tags, publication_status, published_at, development_drive, youtube_url, version
+FROM content_apps WHERE slug = $1`, slug.String()).Scan(&idValue, &title, &description, &tags, &statusValue, &publishedAt, &developmentDrive, &youtubeURL, &version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, 0, false, nil
 	}
@@ -148,7 +156,11 @@ FROM content_apps WHERE slug = $1`, slug.String()).Scan(&title, &description, &t
 	if publishedAt.Valid {
 		publicationTime = publishedAt.Time
 	}
-	app, err := domain.RestoreApp(slug, title, description, tags, status, publicationTime, developmentDrive.String, youtubeURL.String)
+	id, err := domain.RestoreAppID(idValue)
+	if err != nil {
+		return nil, 0, false, fmt.Errorf("restore content app id: %w", err)
+	}
+	app, err := domain.RestoreAppWithID(id, slug, title, description, tags, status, publicationTime, developmentDrive.String, youtubeURL.String)
 	if err != nil {
 		return nil, 0, false, fmt.Errorf("restore content app %q: %w", slug.String(), err)
 	}

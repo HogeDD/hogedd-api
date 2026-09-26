@@ -540,8 +540,11 @@ components:
     ManagementApp:
       type: object
       additionalProperties: false
-      required: [slug, title, description, status, tags]
+      required: [id, slug, title, description, status, tags]
       properties:
+        id:
+          type: string
+          format: uuid
         slug:
           type: string
           pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$

@@ -43,6 +43,7 @@ var (
 // App はHogeDDが公開するアプリと紹介動画の組み合わせを表します。
 // Slugを同一性として持ち、公開に必要な情報が揃うまで公開済みにはなりません。
 type App struct {
+	id                AppID
 	slug              Slug
 	title             string
 	description       string
@@ -112,6 +113,10 @@ func (a *App) UpdateManagementDetails(title, description string, tags []string, 
 
 // NewPreparingApp は公開準備中のAppを生成します。
 func NewPreparingApp(slug Slug, title, description string, tags []string) (*App, error) {
+	id, err := NewAppID()
+	if err != nil {
+		return nil, err
+	}
 	if slug.String() == "" {
 		return nil, ErrInvalidSlug
 	}
@@ -150,12 +155,23 @@ func NewPreparingApp(slug Slug, title, description string, tags []string) (*App,
 	}
 
 	return &App{
+		id:                id,
 		slug:              slug,
 		title:             title,
 		description:       description,
 		tags:              normalizedTags,
 		publicationStatus: PublicationStatusPreparing,
 	}, nil
+}
+
+// RestoreAppWithID は永続化されたIDを含む値からAppを復元します。
+func RestoreAppWithID(id AppID, slug Slug, title, description string, tags []string, status PublicationStatus, publishedAt time.Time, developmentDrive, youTubeURL string) (*App, error) {
+	app, err := RestoreApp(slug, title, description, tags, status, publishedAt, developmentDrive, youTubeURL)
+	if err != nil {
+		return nil, err
+	}
+	app.id = id
+	return app, nil
 }
 
 // RestoreApp は永続化された値からAppを復元し、domain invariantを再検証します。
@@ -220,6 +236,9 @@ func (a *App) MakePrivate() error {
 func (a *App) Slug() Slug {
 	return a.slug
 }
+
+// ID はAppの変更されない識別子を返します。
+func (a *App) ID() AppID { return a.id }
 
 // Title は表示用のアプリ名を返します。
 func (a *App) Title() string {
