@@ -19,6 +19,9 @@ import (
 
 var application = sync.OnceValue(newApplication)
 
+// Application は詳細Functionと共有する構築済みApplicationを返します。
+func Application() *app.Application { return application() }
+
 func newApplication() *app.Application {
 	runtimeConfig := config.LoadRuntime()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: runtimeConfig.LogLevel}))
@@ -44,6 +47,7 @@ func newApplication() *app.Application {
 		app.WithAccessTokenVerifier(verifier),
 		app.WithManagementUserGetter(userapp.NewGetManagementUserUseCase(users)),
 		app.WithManagementAppUseCases(contentapp.NewListManagementAppsUseCase(apps), contentapp.NewCreatePreparingAppUseCase(apps)),
+		app.WithManagementAppDetailUseCases(contentapp.NewGetManagementAppUseCase(apps), contentapp.NewUpdateManagementAppUseCase(apps)),
 	)
 	if err != nil {
 		panic(err)

@@ -77,3 +77,51 @@ ORDER BY updated_at DESC, slug ASC`)
 	}
 	return apps, nil
 }
+
+// FindForManagement は管理用に公開状態を問わずAppとversionを取得します。
+func (r *PostgresAppRepository) FindForManagement(ctx context.Context, slug domain.Slug) (*domain.App, int64, bool, error) {
+	var title, description, statusValue string
+	var tags []string
+	var publishedAt sql.NullTime
+	var developmentDrive, youtubeURL sql.NullString
+	var version int64
+	err := r.db.QueryRowContext(ctx, `
+SELECT title, description, tags, publication_status, published_at, development_drive, youtube_url, version
+FROM content_apps WHERE slug = $1`, slug.String()).Scan(&title, &description, &tags, &statusValue, &publishedAt, &developmentDrive, &youtubeURL, &version)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, 0, false, nil
+	}
+	if err != nil {
+		return nil, 0, false, fmt.Errorf("find content app: %w", err)
+	}
+	status, err := domain.ParsePublicationStatus(statusValue)
+	if err != nil {
+		return nil, 0, false, fmt.Errorf("restore content app status: %w", err)
+	}
+	publicationTime := time.Time{}
+	if publishedAt.Valid {
+		publicationTime = publishedAt.Time
+	}
+	app, err := domain.RestoreApp(slug, title, description, tags, status, publicationTime, developmentDrive.String, youtubeURL.String)
+	if err != nil {
+		return nil, 0, false, fmt.Errorf("restore content app %q: %w", slug.String(), err)
+	}
+	return app, version, true, nil
+}
+
+// UpdateDraft はversion一致時だけDraft情報を更新して新しいversionを返します。
+func (r *PostgresAppRepository) UpdateDraft(ctx context.Context, app *domain.App, expectedVersion int64) (int64, error) {
+	var version int64
+	err := r.db.QueryRowContext(ctx, `
+UPDATE content_apps
+SET title = $1, description = $2, tags = $3, version = version + 1, updated_at = CURRENT_TIMESTAMP
+WHERE slug = $4 AND publication_status = 'preparing' AND version = $5
+RETURNING version`, app.Title(), app.Description(), app.Tags(), app.Slug().String(), expectedVersion).Scan(&version)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, application.ErrAppVersionConflict
+	}
+	if err != nil {
+		return 0, fmt.Errorf("update draft content app: %w", err)
+	}
+	return version, nil
+}

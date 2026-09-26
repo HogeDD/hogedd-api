@@ -41,12 +41,26 @@ func TestPostgresAppRepositoryCreateAndList(t *testing.T) {
 	if err := repository.Create(ctx, app); !errors.Is(err, contentapp.ErrAppAlreadyExists) {
 		t.Fatalf("duplicate Create() error = %v", err)
 	}
+	stored, version, found, err := repository.FindForManagement(ctx, slug)
+	if err != nil || !found || version != 1 {
+		t.Fatalf("FindForManagement() = %+v, %d, %v, %v", stored, version, found, err)
+	}
+	if err := stored.UpdateDraftDetails("Updated Repository Test", "Updated adapter test", []string{"Go"}); err != nil {
+		t.Fatal(err)
+	}
+	newVersion, err := repository.UpdateDraft(ctx, stored, version)
+	if err != nil || newVersion != 2 {
+		t.Fatalf("UpdateDraft() = %d, %v", newVersion, err)
+	}
+	if _, err := repository.UpdateDraft(ctx, stored, version); !errors.Is(err, contentapp.ErrAppVersionConflict) {
+		t.Fatalf("stale UpdateDraft() error = %v", err)
+	}
 	apps, err := repository.List(ctx)
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
 	for _, stored := range apps {
-		if stored.Slug().String() == slugValue && len(stored.Tags()) == 2 {
+		if stored.Slug().String() == slugValue && stored.Title() == "Updated Repository Test" {
 			return
 		}
 	}

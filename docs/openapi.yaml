@@ -300,6 +300,66 @@ paths:
           $ref: "#/components/responses/ManagementNotFound"
         "500":
           $ref: "#/components/responses/InternalError"
+  /v1/management/apps/{slug}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+    get:
+      summary: 運営用App詳細を取得
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: versionを含む運営用App詳細
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManagementApp"
+        "404":
+          $ref: "#/components/responses/ManagementNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    head:
+      summary: 運営用App詳細を取得可能か確認
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 取得可能
+        "404":
+          $ref: "#/components/responses/ManagementNotFound"
+    put:
+      summary: 公開準備中Appの表示情報を更新
+      description: 取得時のversionが現在値と一致する場合だけ更新する。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateManagementApp"
+      responses:
+        "200":
+          description: 更新後の運営用App
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManagementApp"
+        "400":
+          description: JSON形式またはrequest bodyが不正
+        "404":
+          $ref: "#/components/responses/ManagementNotFound"
+        "409":
+          description: version競合または公開済みApp
+        "422":
+          description: App入力がdomain ruleを満たさない
+        "500":
+          $ref: "#/components/responses/InternalError"
     head:
       summary: 運営用App一覧を取得可能か確認
       security:
@@ -427,6 +487,10 @@ components:
             type: string
             minLength: 1
             maxLength: 30
+        version:
+          type: integer
+          format: int64
+          minimum: 1
     CreateManagementApp:
       type: object
       additionalProperties: false
@@ -451,6 +515,31 @@ components:
             type: string
             minLength: 1
             maxLength: 30
+    UpdateManagementApp:
+      type: object
+      additionalProperties: false
+      required: [title, description, tags, version]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        tags:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 30
+        version:
+          type: integer
+          format: int64
+          minimum: 1
     PublishedApp:
       type: object
       required: [slug, title, description, status, published_at, tags, development_drive, youtube_url]
