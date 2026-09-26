@@ -18,6 +18,9 @@ import (
 )
 
 type dependencies struct {
+	publishedAppsLister    contenthttp.PublishedAppsLister
+	publishedAppGetter     contenthttp.PublishedAppGetter
+	recommendedAppsLister  contenthttp.PublishedAppsLister
 	accessTokenVerifier    httpapi.AccessTokenVerifier
 	userGetter             userhttp.CurrentUserGetter
 	userRegistrar          userhttp.AuthenticatedUserRegistrar
@@ -29,6 +32,21 @@ type dependencies struct {
 	managementAppGetter    contenthttp.ManagementAppGetter
 	managementAppUpdater   contenthttp.ManagementAppUpdater
 	managementAppPublisher contenthttp.ManagementAppPublisher
+}
+
+// WithPublishedAppUseCases は公開Appの一覧・詳細・おすすめ取得元を設定します。
+func WithPublishedAppUseCases(list contenthttp.PublishedAppsLister, get contenthttp.PublishedAppGetter, recommended contenthttp.PublishedAppsLister) Option {
+	return func(dependencies *dependencies) {
+		if list != nil {
+			dependencies.publishedAppsLister = list
+		}
+		if get != nil {
+			dependencies.publishedAppGetter = get
+		}
+		if recommended != nil {
+			dependencies.recommendedAppsLister = recommended
+		}
+	}
 }
 
 // WithManagementAppPublicationUseCase は運営App公開Use Caseを設定します。
@@ -201,6 +219,7 @@ type Application struct {
 	handler                         http.Handler
 	healthHandler                   http.Handler
 	appsListHandler                 http.Handler
+	appsRecommendedHandler          http.Handler
 	appDetailHandler                http.Handler
 	meHandler                       http.Handler
 	userRegistrationHandler         http.Handler
@@ -219,6 +238,7 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		logger = slog.Default()
 	}
 	dependencies := dependencies{
+		publishedAppsLister: nil, publishedAppGetter: nil, recommendedAppsLister: nil,
 		accessTokenVerifier:    rejectAccessTokenVerifier{},
 		userGetter:             unavailableUserGetter{},
 		userRegistrar:          unavailableUserRegistrar{},
@@ -250,9 +270,17 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
+	if dependencies.publishedAppsLister == nil {
+		dependencies.publishedAppsLister = application.NewListPublishedAppsUseCase(appStore)
+	}
+	if dependencies.publishedAppGetter == nil {
+		dependencies.publishedAppGetter = application.NewGetPublishedAppUseCase(appStore)
+	}
+	if dependencies.recommendedAppsLister == nil {
+		dependencies.recommendedAppsLister = application.NewListPublishedAppsUseCase(appStore)
+	}
 	appsHandler := contenthttp.NewAppsHandler(
-		application.NewListPublishedAppsUseCase(appStore),
-		application.NewGetPublishedAppUseCase(appStore),
+		dependencies.publishedAppsLister, dependencies.publishedAppGetter, dependencies.recommendedAppsLister,
 		responder,
 	)
 	middleware := httpapi.NewMiddlewareStack(
@@ -285,6 +313,7 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		handler: middleware.Wrap(httpapi.NewRouter(
 			healthHandler,
 			http.HandlerFunc(appsHandler.List),
+			http.HandlerFunc(appsHandler.Recommended),
 			http.HandlerFunc(appsHandler.Get),
 			authenticatedMeHandler,
 			authenticatedUserMeHandler,
@@ -297,6 +326,7 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		)),
 		healthHandler:                   middleware.Wrap(healthHandler),
 		appsListHandler:                 middleware.Wrap(http.HandlerFunc(appsHandler.List)),
+		appsRecommendedHandler:          middleware.Wrap(http.HandlerFunc(appsHandler.Recommended)),
 		appDetailHandler:                middleware.Wrap(http.HandlerFunc(appsHandler.Get)),
 		meHandler:                       middleware.Wrap(authenticatedMeHandler),
 		userRegistrationHandler:         middleware.Wrap(authenticatedUserMeHandler),

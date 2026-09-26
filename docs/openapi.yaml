@@ -50,6 +50,31 @@ paths:
           description: 取得可能
         "500":
           description: サーバーエラー
+  /v1/apps/recommended:
+    get:
+      summary: おすすめの公開App一覧を取得
+      responses:
+        "200":
+          description: おすすめ掲載中の公開App一覧
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PublishedApp"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    head:
+      summary: おすすめの公開Appを取得可能か確認
+      responses:
+        "200":
+          description: 取得可能
+        "500":
+          $ref: "#/components/responses/InternalError"
   /v1/apps/{slug}:
     parameters:
       - name: slug
