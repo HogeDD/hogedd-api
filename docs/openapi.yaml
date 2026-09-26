@@ -5,6 +5,26 @@ info:
 servers:
   - url: https://api.hogedd.com
 paths:
+  /v1/apps/recommendations:
+    get:
+      summary: 最新・人気・急上昇のAppを取得
+      responses:
+        "200":
+          description: 重複を除いた推薦枠
+  /v1/apps/{slug}/launches:
+    post:
+      summary: 匿名訪問者のApp起動を記録
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: 記録済みまたは同日記録済み
+        "404":
+          description: Appが存在しないか計測が利用不能
   /health:
     get:
       summary: 稼働確認

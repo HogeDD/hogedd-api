@@ -4,12 +4,14 @@ import "net/http"
 
 // NewRouter はローカル実行で使用するAPIルーターを構築します。
 // Vercelでは各Functionが対応するハンドラーを直接使用します。
-func NewRouter(healthHandler, appsListHandler, appsRecommendedHandler, appDetailHandler, meHandler, userRegistrationHandler, userProfileHandler, managementUserHandler, managementAppsHandler, managementAppHandler, managementAppPublicationHandler, managementNotFoundHandler http.Handler) http.Handler {
+func NewRouter(healthHandler, appsListHandler, appsRecommendedHandler, appDetailHandler, appRecommendationsHandler, appLaunchHandler, meHandler, userRegistrationHandler, userProfileHandler, managementUserHandler, managementAppsHandler, managementAppHandler, managementAppPublicationHandler, managementNotFoundHandler http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/health", healthHandler)
 	mux.Handle("/api/health", healthHandler)
 	mux.Handle("/v1/apps", appsListHandler)
 	mux.Handle("/v1/apps/recommended", appsRecommendedHandler)
+	mux.Handle("/v1/apps/recommendations", appRecommendationsHandler)
+	mux.Handle("/v1/apps/{slug}/launches", appLaunchHandler)
 	mux.Handle("/v1/apps/{slug}", appDetailHandler)
 	mux.Handle("/v1/me", meHandler)
 	mux.Handle("/v1/users/me", userRegistrationHandler)
@@ -22,6 +24,11 @@ func NewRouter(healthHandler, appsListHandler, appsRecommendedHandler, appDetail
 	mux.Handle("/v1/management/", managementNotFoundHandler)
 	mux.Handle("/api/apps", appsListHandler)
 	mux.Handle("/api/apps/recommended", appsRecommendedHandler)
+	mux.Handle("/api/apps/recommendations", appRecommendationsHandler)
+	mux.HandleFunc("/api/apps/launches", func(w http.ResponseWriter, r *http.Request) {
+		r.SetPathValue("slug", r.URL.Query().Get("slug"))
+		appLaunchHandler.ServeHTTP(w, r)
+	})
 	mux.HandleFunc("/api/apps/detail", func(w http.ResponseWriter, r *http.Request) {
 		r.SetPathValue("slug", r.URL.Query().Get("slug"))
 		appDetailHandler.ServeHTTP(w, r)

@@ -89,6 +89,7 @@ docker run --rm --init \
 | `DATABASE_URL` | なし | Neonのpooled connection string。DBを使う処理で必須 |
 | `DATABASE_URL_UNPOOLED` | なし | Neonのdirect connection string。migration実行時だけ使用 |
 | `DATABASE_MIGRATION_URL` | なし | migration先を明示的に上書きする場合だけ使用 |
+| `METRICS_INGEST_TOKEN` | なし | Web BFFから匿名起動を記録するための共有秘密値。未設定時は計測endpointだけ404 |
 | `DATABASE_MAX_OPEN_CONNS` | `5` | 1インスタンスが保持する最大DB接続数 |
 | `DATABASE_MAX_IDLE_CONNS` | `2` | 1インスタンスが保持する最大idle接続数 |
 
