@@ -1,9 +1,8 @@
-package handler
+package shared
 
 import (
 	"context"
 	"log/slog"
-	"net/http"
 	"os"
 	"sync"
 
@@ -11,29 +10,18 @@ import (
 	"github.com/iwasawa/hogedd-api/internal/config"
 	contentapp "github.com/iwasawa/hogedd-api/internal/content/application"
 	contentinfra "github.com/iwasawa/hogedd-api/internal/content/infrastructure"
-	identityauth0 "github.com/iwasawa/hogedd-api/internal/identity/infrastructure/auth0"
 	platformpostgres "github.com/iwasawa/hogedd-api/internal/platform/postgres"
-	userapp "github.com/iwasawa/hogedd-api/internal/user/application"
-	userpostgres "github.com/iwasawa/hogedd-api/internal/user/infrastructure/postgres"
 )
 
 var application = sync.OnceValue(newApplication)
 
-// Application は詳細Functionと共有する構築済みApplicationを返します。
+// Application は公開Apps Functionで共有するDB接続済みApplicationを返します。
 func Application() *app.Application { return application() }
 
 func newApplication() *app.Application {
 	runtimeConfig := config.LoadRuntime()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: runtimeConfig.LogLevel}))
-	authenticationConfig, err := config.LoadAuthentication()
-	if err != nil {
-		panic(err)
-	}
 	databaseConfig, err := config.LoadDatabase()
-	if err != nil {
-		panic(err)
-	}
-	verifier, err := identityauth0.NewVerifier(authenticationConfig)
 	if err != nil {
 		panic(err)
 	}
@@ -41,14 +29,8 @@ func newApplication() *app.Application {
 	if err != nil {
 		panic(err)
 	}
-	users := userpostgres.NewUserRegistrar(database)
 	apps := contentinfra.NewPostgresAppRepository(database)
 	application, err := app.New(logger,
-		app.WithAccessTokenVerifier(verifier),
-		app.WithManagementUserGetter(userapp.NewGetManagementUserUseCase(users)),
-		app.WithManagementAppUseCases(contentapp.NewListManagementAppsUseCase(apps), contentapp.NewCreatePreparingAppUseCase(apps)),
-		app.WithManagementAppDetailUseCases(contentapp.NewGetManagementAppUseCase(apps), contentapp.NewUpdateManagementAppUseCase(apps)),
-		app.WithManagementAppPublicationUseCase(contentapp.NewPublishManagementAppUseCase(apps, nil)),
 		app.WithPublishedAppUseCases(contentapp.NewListPublishedAppsUseCase(apps), contentapp.NewGetPublishedAppUseCase(apps), contentapp.NewListRecommendedAppsUseCase(apps)),
 		app.WithAppMetrics(contentapp.NewRecordAppLaunchUseCase(apps, nil), contentapp.NewGetAppRecommendationsUseCase(apps, nil), config.LoadMetricsIngestToken()),
 	)
@@ -56,9 +38,4 @@ func newApplication() *app.Application {
 		panic(err)
 	}
 	return application
-}
-
-// Handler は運営App一覧・作成Functionの入口です。
-func Handler(w http.ResponseWriter, r *http.Request) {
-	application().ManagementAppsHandler().ServeHTTP(w, r)
 }

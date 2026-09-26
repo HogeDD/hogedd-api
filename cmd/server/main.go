@@ -81,6 +81,11 @@ func main() {
 			),
 			app.WithManagementAppPublicationUseCase(contentapp.NewPublishManagementAppUseCase(contentRepository, nil)),
 			app.WithPublishedAppUseCases(contentapp.NewListPublishedAppsUseCase(contentRepository), contentapp.NewGetPublishedAppUseCase(contentRepository), contentapp.NewListRecommendedAppsUseCase(contentRepository)),
+			app.WithAppMetrics(
+				contentapp.NewRecordAppLaunchUseCase(contentRepository, nil),
+				contentapp.NewGetAppRecommendationsUseCase(contentRepository, nil),
+				config.LoadMetricsIngestToken(),
+			),
 			app.WithUserRegistrar(registerUser),
 			app.WithProfileUseCases(
 				userapp.NewGetCurrentProfileUseCase(profileRepository),

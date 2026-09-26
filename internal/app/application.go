@@ -32,6 +32,22 @@ type dependencies struct {
 	managementAppGetter    contenthttp.ManagementAppGetter
 	managementAppUpdater   contenthttp.ManagementAppUpdater
 	managementAppPublisher contenthttp.ManagementAppPublisher
+	appLaunchRecorder      contenthttp.AppLaunchRecorder
+	appRecommendations     contenthttp.AppRecommendationsGetter
+	metricsIngestToken     string
+}
+
+// WithAppMetrics は匿名起動記録と推薦取得を設定します。
+func WithAppMetrics(recorder contenthttp.AppLaunchRecorder, recommendations contenthttp.AppRecommendationsGetter, ingestToken string) Option {
+	return func(dependencies *dependencies) {
+		if recorder != nil {
+			dependencies.appLaunchRecorder = recorder
+		}
+		if recommendations != nil {
+			dependencies.appRecommendations = recommendations
+		}
+		dependencies.metricsIngestToken = ingestToken
+	}
 }
 
 // WithPublishedAppUseCases は公開Appの一覧・詳細・おすすめ取得元を設定します。
@@ -160,6 +176,20 @@ type unavailablePreparingAppCreator struct{ unavailableManagementApps }
 type unavailableManagementAppGetter struct{ unavailableManagementApps }
 type unavailableManagementAppUpdater struct{ unavailableManagementApps }
 type unavailableManagementAppPublisher struct{ unavailableManagementApps }
+type unavailableAppMetrics struct{}
+
+func (unavailableAppMetrics) Execute(context.Context, string, string) (bool, error) {
+	return false, errors.New("app metrics are not configured")
+}
+func (unavailableAppMetrics) ExecuteRecommendations(context.Context) (application.AppRecommendationsResult, error) {
+	return application.AppRecommendationsResult{}, errors.New("app recommendations are not configured")
+}
+
+type unavailableAppRecommendations struct{}
+
+func (unavailableAppRecommendations) Execute(context.Context) (application.AppRecommendationsResult, error) {
+	return application.AppRecommendationsResult{}, errors.New("app recommendations are not configured")
+}
 
 func (unavailableManagementAppGetter) Execute(context.Context, string) (application.ManagementAppResult, error) {
 	return application.ManagementAppResult{}, errors.New("management app is not configured")
@@ -221,6 +251,8 @@ type Application struct {
 	appsListHandler                 http.Handler
 	appsRecommendedHandler          http.Handler
 	appDetailHandler                http.Handler
+	appRecommendationsHandler       http.Handler
+	appLaunchHandler                http.Handler
 	meHandler                       http.Handler
 	userRegistrationHandler         http.Handler
 	userProfileHandler              http.Handler
@@ -250,6 +282,8 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		managementAppGetter:    unavailableManagementAppGetter{},
 		managementAppUpdater:   unavailableManagementAppUpdater{},
 		managementAppPublisher: unavailableManagementAppPublisher{},
+		appLaunchRecorder:      unavailableAppMetrics{},
+		appRecommendations:     unavailableAppRecommendations{},
 	}
 	for _, option := range options {
 		option(&dependencies)
@@ -283,6 +317,7 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		dependencies.publishedAppsLister, dependencies.publishedAppGetter, dependencies.recommendedAppsLister,
 		responder,
 	)
+	appMetricsHandler := contenthttp.NewAppMetricsHandler(dependencies.appLaunchRecorder, dependencies.appRecommendations, dependencies.metricsIngestToken, responder)
 	middleware := httpapi.NewMiddlewareStack(
 		httpapi.RequestID(),
 		httpapi.SecurityHeaders(),
@@ -315,6 +350,8 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 			http.HandlerFunc(appsHandler.List),
 			http.HandlerFunc(appsHandler.Recommended),
 			http.HandlerFunc(appsHandler.Get),
+			http.HandlerFunc(appMetricsHandler.Recommendations),
+			http.HandlerFunc(appMetricsHandler.RecordLaunch),
 			authenticatedMeHandler,
 			authenticatedUserMeHandler,
 			authenticatedUserProfileHandler,
@@ -328,6 +365,8 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		appsListHandler:                 middleware.Wrap(http.HandlerFunc(appsHandler.List)),
 		appsRecommendedHandler:          middleware.Wrap(http.HandlerFunc(appsHandler.Recommended)),
 		appDetailHandler:                middleware.Wrap(http.HandlerFunc(appsHandler.Get)),
+		appRecommendationsHandler:       middleware.Wrap(http.HandlerFunc(appMetricsHandler.Recommendations)),
+		appLaunchHandler:                middleware.Wrap(http.HandlerFunc(appMetricsHandler.RecordLaunch)),
 		meHandler:                       middleware.Wrap(authenticatedMeHandler),
 		userRegistrationHandler:         middleware.Wrap(authenticatedUserMeHandler),
 		userProfileHandler:              middleware.Wrap(authenticatedUserProfileHandler),
@@ -388,6 +427,12 @@ func (a *Application) AppsRecommendedHandler() http.Handler {
 func (a *Application) AppDetailHandler() http.Handler {
 	return a.appDetailHandler
 }
+
+// AppRecommendationsHandler はVercelの推薦取得Functionで使用するHandlerを返します。
+func (a *Application) AppRecommendationsHandler() http.Handler { return a.appRecommendationsHandler }
+
+// AppLaunchHandler はVercelの匿名起動記録Functionで使用するHandlerを返します。
+func (a *Application) AppLaunchHandler() http.Handler { return a.appLaunchHandler }
 
 // MeHandler はVercelの認証主体取得Functionで使用するHandlerを返します。
 func (a *Application) MeHandler() http.Handler {

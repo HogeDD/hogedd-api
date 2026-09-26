@@ -14,6 +14,14 @@
       "destination": "/api/apps?recommended=true"
     },
     {
+      "source": "/v1/apps/recommendations",
+      "destination": "/api/apps/recommendations"
+    },
+    {
+      "source": "/v1/apps/:slug/launches",
+      "destination": "/api/apps/launches?slug=:slug"
+    },
+    {
       "source": "/v1/apps/:slug",
       "destination": "/api/apps/detail?slug=:slug"
     },
