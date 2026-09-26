@@ -379,6 +379,11 @@ func (a *Application) AppsListHandler() http.Handler {
 	return a.appsListHandler
 }
 
+// AppsRecommendedHandler はVercelの公開おすすめアプリFunctionで使用するHandlerを返します。
+func (a *Application) AppsRecommendedHandler() http.Handler {
+	return a.appsRecommendedHandler
+}
+
 // AppDetailHandler はVercelの公開アプリ詳細Functionで使用するHandlerを返します。
 func (a *Application) AppDetailHandler() http.Handler {
 	return a.appDetailHandler
