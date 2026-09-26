@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	contentapp "github.com/iwasawa/hogedd-api/internal/content/application"
 	"github.com/iwasawa/hogedd-api/internal/content/domain"
@@ -54,6 +55,17 @@ func TestPostgresAppRepositoryCreateAndList(t *testing.T) {
 	}
 	if _, err := repository.UpdateDraft(ctx, stored, version); !errors.Is(err, contentapp.ErrAppVersionConflict) {
 		t.Fatalf("stale UpdateDraft() error = %v", err)
+	}
+	stored, version, _, err = repository.FindForManagement(ctx, slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := stored.Publish(time.Now().UTC(), "学習DD", "https://youtu.be/video"); err != nil {
+		t.Fatal(err)
+	}
+	publishedVersion, err := repository.Publish(ctx, stored, version)
+	if err != nil || publishedVersion != version+1 {
+		t.Fatalf("Publish() = %d, %v", publishedVersion, err)
 	}
 	apps, err := repository.List(ctx)
 	if err != nil {

@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/iwasawa/hogedd-api/internal/content/domain"
 )
@@ -23,12 +24,71 @@ type AppCreator interface {
 
 // ManagementAppResult は運営画面へ返す公開前情報を含むAppです。
 type ManagementAppResult struct {
-	Slug        string   `json:"slug"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Status      string   `json:"status"`
-	Tags        []string `json:"tags"`
-	Version     int64    `json:"version,omitempty"`
+	Slug             string   `json:"slug"`
+	Title            string   `json:"title"`
+	Description      string   `json:"description"`
+	Status           string   `json:"status"`
+	Tags             []string `json:"tags"`
+	Version          int64    `json:"version,omitempty"`
+	PublishedAt      string   `json:"published_at,omitempty"`
+	DevelopmentDrive string   `json:"development_drive,omitempty"`
+	YouTubeURL       string   `json:"youtube_url,omitempty"`
+}
+
+// ManagementAppPublisher はApp公開の楽観的ロック更新に必要なportです。
+type ManagementAppPublisher interface {
+	ManagementAppEditor
+	Publish(context.Context, *domain.App, int64) (int64, error)
+}
+
+// PublishManagementAppUseCase は公開準備中Appを公開します。
+type PublishManagementAppUseCase struct {
+	publisher ManagementAppPublisher
+	now       func() time.Time
+}
+
+// NewPublishManagementAppUseCase は公開永続化portとsystem clockからUse Caseを構築します。
+func NewPublishManagementAppUseCase(publisher ManagementAppPublisher, now func() time.Time) *PublishManagementAppUseCase {
+	if now == nil {
+		now = time.Now
+	}
+	return &PublishManagementAppUseCase{publisher: publisher, now: now}
+}
+
+// Execute は公開済みなら現在値を返し、Draftなら公開条件を検証して保存します。
+func (uc *PublishManagementAppUseCase) Execute(ctx context.Context, value, developmentDrive, youTubeURL string, expectedVersion int64) (ManagementAppResult, error) {
+	if expectedVersion < 1 {
+		return ManagementAppResult{}, ErrAppVersionConflict
+	}
+	slug, err := domain.NewSlug(value)
+	if err != nil {
+		return ManagementAppResult{}, ErrManagementAppNotFound
+	}
+	app, version, found, err := uc.publisher.FindForManagement(ctx, slug)
+	if err != nil {
+		return ManagementAppResult{}, err
+	}
+	if !found {
+		return ManagementAppResult{}, ErrManagementAppNotFound
+	}
+	if app.PublicationStatus().IsPublic() {
+		result := toManagementAppResult(app)
+		result.Version = version
+		return result, nil
+	}
+	if version != expectedVersion {
+		return ManagementAppResult{}, ErrAppVersionConflict
+	}
+	if err := app.Publish(uc.now().UTC(), developmentDrive, youTubeURL); err != nil {
+		return ManagementAppResult{}, err
+	}
+	version, err = uc.publisher.Publish(ctx, app, expectedVersion)
+	if err != nil {
+		return ManagementAppResult{}, err
+	}
+	result := toManagementAppResult(app)
+	result.Version = version
+	return result, nil
 }
 
 // ManagementAppEditor は管理用Appの取得と楽観的ロック更新に必要なportです。
@@ -145,5 +205,11 @@ func (uc *ListManagementAppsUseCase) Execute(ctx context.Context) ([]ManagementA
 }
 
 func toManagementAppResult(app *domain.App) ManagementAppResult {
-	return ManagementAppResult{Slug: app.Slug().String(), Title: app.Title(), Description: app.Description(), Tags: app.Tags(), Status: string(app.PublicationStatus())}
+	result := ManagementAppResult{Slug: app.Slug().String(), Title: app.Title(), Description: app.Description(), Tags: app.Tags(), Status: string(app.PublicationStatus())}
+	if app.PublicationStatus().IsPublic() {
+		result.PublishedAt = app.PublishedAt().UTC().Format(time.RFC3339)
+		result.DevelopmentDrive = app.DevelopmentDrive()
+		result.YouTubeURL = app.YouTubeURL()
+	}
+	return result
 }
