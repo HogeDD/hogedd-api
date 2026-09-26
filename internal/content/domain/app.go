@@ -55,7 +55,7 @@ type App struct {
 
 // UpdateDraftDetails は公開準備中Appの表示情報を検証して更新します。
 func (a *App) UpdateDraftDetails(title, description string, tags []string) error {
-	if a.publicationStatus != PublicationStatusPreparing {
+	if a.publicationStatus != PublicationStatusPreparing && a.publicationStatus != PublicationStatusPrivate {
 		return ErrPublishedAppCannotBeEdited
 	}
 	updated, err := NewPreparingApp(a.slug, title, description, tags)
@@ -131,6 +131,11 @@ func RestoreApp(slug Slug, title, description string, tags []string, status Publ
 		if err := app.Publish(publishedAt, developmentDrive, youTubeURL); err != nil {
 			return nil, err
 		}
+	case PublicationStatusPrivate:
+		if err := app.Publish(publishedAt, developmentDrive, youTubeURL); err != nil {
+			return nil, err
+		}
+		app.publicationStatus = PublicationStatusPrivate
 	default:
 		return nil, errors.New("invalid publication status")
 	}
@@ -158,6 +163,15 @@ func (a *App) Publish(publishedAt time.Time, developmentDrive, youTubeURL string
 	a.developmentDrive = developmentDrive
 	a.youTubeURL = normalizedYouTubeURL
 
+	return nil
+}
+
+// MakePrivate は公開情報を保持したまま一般公開を停止します。
+func (a *App) MakePrivate() error {
+	if !a.publicationStatus.IsPublic() {
+		return errors.New("only published app can be made private")
+	}
+	a.publicationStatus = PublicationStatusPrivate
 	return nil
 }
 
