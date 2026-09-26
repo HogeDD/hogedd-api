@@ -20,7 +20,7 @@ type ManagementAppGetter interface {
 
 // ManagementAppUpdater は管理用Draft更新に必要な操作です。
 type ManagementAppUpdater interface {
-	Execute(context.Context, string, string, string, []string, int64) (contentapp.ManagementAppResult, error)
+	Execute(context.Context, string, string, string, []string, string, string, string, int64) (contentapp.ManagementAppResult, error)
 }
 
 // ManagementAppHandler は単一Appの管理用取得・更新を処理します。
@@ -82,10 +82,13 @@ func (h *ManagementAppHandler) updateApp(w http.ResponseWriter, r *http.Request)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	var input struct {
-		Title       string   `json:"title"`
-		Description string   `json:"description"`
-		Tags        []string `json:"tags"`
-		Version     int64    `json:"version"`
+		Title            string   `json:"title"`
+		Description      string   `json:"description"`
+		Tags             []string `json:"tags"`
+		Status           string   `json:"status"`
+		DevelopmentDrive string   `json:"development_drive"`
+		YouTubeURL       string   `json:"youtube_url"`
+		Version          int64    `json:"version"`
 	}
 	if err := decoder.Decode(&input); err != nil {
 		h.responder.Error(w, r, http.StatusBadRequest, "invalid_request", "invalid request body")
@@ -95,15 +98,13 @@ func (h *ManagementAppHandler) updateApp(w http.ResponseWriter, r *http.Request)
 		h.responder.Error(w, r, http.StatusBadRequest, "invalid_request", "request body must contain one JSON object")
 		return
 	}
-	result, err := h.update.Execute(r.Context(), r.PathValue("slug"), input.Title, input.Description, input.Tags, input.Version)
+	result, err := h.update.Execute(r.Context(), r.PathValue("slug"), input.Title, input.Description, input.Tags, input.Status, input.DevelopmentDrive, input.YouTubeURL, input.Version)
 	switch {
 	case errors.Is(err, contentapp.ErrManagementAppNotFound):
 		h.responder.ConcealedNotFound(w, r, "management_app_not_found", err)
 	case errors.Is(err, contentapp.ErrAppVersionConflict):
 		h.responder.Error(w, r, http.StatusConflict, "app_version_conflict", "app was updated by another request")
-	case errors.Is(err, domain.ErrPublishedAppCannotBeEdited):
-		h.responder.Error(w, r, http.StatusConflict, "published_app_not_editable", "published app cannot be edited")
-	case errors.Is(err, domain.ErrTitleRequired), errors.Is(err, domain.ErrDescriptionRequired), errors.Is(err, domain.ErrTitleTooLong), errors.Is(err, domain.ErrDescriptionTooLong), errors.Is(err, domain.ErrInvalidTags):
+	case errors.Is(err, domain.ErrTitleRequired), errors.Is(err, domain.ErrDescriptionRequired), errors.Is(err, domain.ErrTitleTooLong), errors.Is(err, domain.ErrDescriptionTooLong), errors.Is(err, domain.ErrInvalidTags), errors.Is(err, domain.ErrDevelopmentDriveRequired), errors.Is(err, domain.ErrInvalidYouTubeURL), errors.Is(err, domain.ErrPublishedAtRequired):
 		h.responder.Error(w, r, http.StatusUnprocessableEntity, "validation_failed", "app input is invalid")
 	case err != nil:
 		h.responder.InternalError(w, r, "update management app", err)

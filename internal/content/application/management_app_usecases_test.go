@@ -31,6 +31,10 @@ func (s *managementAppStoreStub) UpdateDraft(_ context.Context, app *domain.App,
 	return expectedVersion + 1, nil
 }
 
+func (s *managementAppStoreStub) Update(ctx context.Context, app *domain.App, expectedVersion int64) (int64, error) {
+	return s.UpdateDraft(ctx, app, expectedVersion)
+}
+
 func (s *managementAppStoreStub) Publish(_ context.Context, app *domain.App, expectedVersion int64) (int64, error) {
 	if s.err != nil {
 		return 0, s.err
@@ -73,14 +77,14 @@ func TestGetAndUpdateManagementApp(t *testing.T) {
 	if err != nil || detail.Version != 3 {
 		t.Fatalf("Get Execute() = %+v, %v", detail, err)
 	}
-	updated, err := NewUpdateManagementAppUseCase(store).Execute(context.Background(), "draft-app", " Updated ", " New description ", []string{"Go"}, detail.Version)
+	updated, err := NewUpdateManagementAppUseCase(store).Execute(context.Background(), "draft-app", " Updated ", " New description ", []string{"Go"}, "private", "", "", detail.Version)
 	if err != nil || updated.Title != "Updated" || updated.Version != 4 {
 		t.Fatalf("Update Execute() = %+v, %v", updated, err)
 	}
 }
 
 func TestUpdateManagementAppRejectsInvalidVersion(t *testing.T) {
-	_, err := NewUpdateManagementAppUseCase(&managementAppStoreStub{}).Execute(context.Background(), "draft-app", "Draft", "Description", nil, 0)
+	_, err := NewUpdateManagementAppUseCase(&managementAppStoreStub{}).Execute(context.Background(), "draft-app", "Draft", "Description", nil, "private", "", "", 0)
 	if err != ErrAppVersionConflict {
 		t.Fatalf("Execute() error = %v", err)
 	}
