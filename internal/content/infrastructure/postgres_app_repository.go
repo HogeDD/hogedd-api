@@ -20,6 +20,12 @@ func NewPostgresAppRepository(db *sql.DB) *PostgresAppRepository {
 	return &PostgresAppRepository{db: db}
 }
 
+// FindBySlug はSlugに一致するAppを公開判定前の状態で返します。
+func (r *PostgresAppRepository) FindBySlug(ctx context.Context, slug domain.Slug) (*domain.App, bool, error) {
+	app, _, found, err := r.FindForManagement(ctx, slug)
+	return app, found, err
+}
+
 // Create は公開準備中Appを作成し、slug重複を業務エラーへ変換します。
 func (r *PostgresAppRepository) Create(ctx context.Context, app *domain.App) error {
 	_, err := r.db.ExecContext(ctx, `
@@ -74,6 +80,46 @@ ORDER BY updated_at DESC, slug ASC`)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("list content apps rows: %w", err)
+	}
+	return apps, nil
+}
+
+// ListRecommended は公開済みでおすすめ順位が設定されたAppを順位順に返します。
+func (r *PostgresAppRepository) ListRecommended(ctx context.Context) ([]*domain.App, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT slug, title, description, tags, publication_status, published_at, development_drive, youtube_url FROM content_apps WHERE publication_status = 'published' AND recommended_rank IS NOT NULL ORDER BY recommended_rank ASC, slug ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("list recommended content apps: %w", err)
+	}
+	defer rows.Close()
+	apps := make([]*domain.App, 0)
+	for rows.Next() {
+		var slugValue, title, description, statusValue string
+		var tags []string
+		var publishedAt sql.NullTime
+		var developmentDrive, youtubeURL sql.NullString
+		if err := rows.Scan(&slugValue, &title, &description, &tags, &statusValue, &publishedAt, &developmentDrive, &youtubeURL); err != nil {
+			return nil, fmt.Errorf("scan recommended content app: %w", err)
+		}
+		slug, err := domain.NewSlug(slugValue)
+		if err != nil {
+			return nil, err
+		}
+		status, err := domain.ParsePublicationStatus(statusValue)
+		if err != nil {
+			return nil, err
+		}
+		published := time.Time{}
+		if publishedAt.Valid {
+			published = publishedAt.Time
+		}
+		app, err := domain.RestoreApp(slug, title, description, tags, status, published, developmentDrive.String, youtubeURL.String)
+		if err != nil {
+			return nil, err
+		}
+		apps = append(apps, app)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list recommended content apps rows: %w", err)
 	}
 	return apps, nil
 }

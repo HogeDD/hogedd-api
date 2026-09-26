@@ -80,6 +80,7 @@ func main() {
 				contentapp.NewUpdateManagementAppUseCase(contentRepository),
 			),
 			app.WithManagementAppPublicationUseCase(contentapp.NewPublishManagementAppUseCase(contentRepository, nil)),
+			app.WithPublishedAppUseCases(contentapp.NewListPublishedAppsUseCase(contentRepository), contentapp.NewGetPublishedAppUseCase(contentRepository), contentapp.NewListRecommendedAppsUseCase(contentRepository)),
 			app.WithUserRegistrar(registerUser),
 			app.WithProfileUseCases(
 				userapp.NewGetCurrentProfileUseCase(profileRepository),

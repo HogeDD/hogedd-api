@@ -11,6 +11,34 @@ type AppLister interface {
 	List(context.Context) ([]*domain.App, error)
 }
 
+// RecommendedAppLister はおすすめApp一覧取得に必要なportです。
+type RecommendedAppLister interface {
+	ListRecommended(context.Context) ([]*domain.App, error)
+}
+
+// ListRecommendedAppsUseCase はおすすめ掲載中の公開Appを取得します。
+type ListRecommendedAppsUseCase struct{ lister RecommendedAppLister }
+
+// NewListRecommendedAppsUseCase はおすすめ取得portからUse Caseを構築します。
+func NewListRecommendedAppsUseCase(lister RecommendedAppLister) *ListRecommendedAppsUseCase {
+	return &ListRecommendedAppsUseCase{lister: lister}
+}
+
+// Execute はおすすめAppを公開用取得結果へ変換します。
+func (uc *ListRecommendedAppsUseCase) Execute(ctx context.Context) ([]PublishedAppResult, error) {
+	apps, err := uc.lister.ListRecommended(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]PublishedAppResult, 0, len(apps))
+	for _, app := range apps {
+		if app.PublicationStatus().IsPublic() {
+			result = append(result, toPublishedAppResult(app))
+		}
+	}
+	return result, nil
+}
+
 // ListPublishedAppsUseCase は公開済みAppの一覧を取得するユースケースです。
 type ListPublishedAppsUseCase struct {
 	lister AppLister

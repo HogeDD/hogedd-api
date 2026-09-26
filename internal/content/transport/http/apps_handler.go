@@ -22,14 +22,34 @@ type PublishedAppGetter interface {
 
 // AppsHandler は公開アプリの取得結果をHTTPレスポンスへ変換します。
 type AppsHandler struct {
-	list      PublishedAppsLister
-	get       PublishedAppGetter
-	responder *httpapi.Responder
+	list        PublishedAppsLister
+	recommended PublishedAppsLister
+	get         PublishedAppGetter
+	responder   *httpapi.Responder
 }
 
 // NewAppsHandler は一覧・1件取得のUse Caseを持つHTTP Handlerを構築します。
-func NewAppsHandler(list PublishedAppsLister, get PublishedAppGetter, responder *httpapi.Responder) *AppsHandler {
-	return &AppsHandler{list: list, get: get, responder: responder}
+func NewAppsHandler(list PublishedAppsLister, get PublishedAppGetter, recommended PublishedAppsLister, responder *httpapi.Responder) *AppsHandler {
+	return &AppsHandler{list: list, get: get, recommended: recommended, responder: responder}
+}
+
+// Recommended はおすすめ公開アプリ一覧へのGETまたはHEADを処理します。
+func (h *AppsHandler) Recommended(w http.ResponseWriter, r *http.Request) {
+	if !h.allowRead(w, r) {
+		return
+	}
+	apps, err := h.recommended.Execute(r.Context())
+	if err != nil {
+		h.responder.InternalError(w, r, "load recommended apps", err)
+		return
+	}
+	data := make([]publishedAppResponse, 0, len(apps))
+	for _, app := range apps {
+		data = append(data, toPublishedAppResponse(app))
+	}
+	h.writeJSON(w, r, http.StatusOK, struct {
+		Data []publishedAppResponse `json:"data"`
+	}{Data: data})
 }
 
 // List は公開アプリ一覧へのGETまたはHEADリクエストを処理します。
