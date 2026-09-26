@@ -18,16 +18,26 @@ import (
 )
 
 type dependencies struct {
-	accessTokenVerifier  httpapi.AccessTokenVerifier
-	userGetter           userhttp.CurrentUserGetter
-	userRegistrar        userhttp.AuthenticatedUserRegistrar
-	profileGetter        userhttp.CurrentProfileGetter
-	profileUpdater       userhttp.CurrentProfileUpdater
-	managementUserGetter userhttp.ManagementUserGetter
-	managementAppsLister contenthttp.ManagementAppsLister
-	preparingAppCreator  contenthttp.PreparingAppCreator
-	managementAppGetter  contenthttp.ManagementAppGetter
-	managementAppUpdater contenthttp.ManagementAppUpdater
+	accessTokenVerifier    httpapi.AccessTokenVerifier
+	userGetter             userhttp.CurrentUserGetter
+	userRegistrar          userhttp.AuthenticatedUserRegistrar
+	profileGetter          userhttp.CurrentProfileGetter
+	profileUpdater         userhttp.CurrentProfileUpdater
+	managementUserGetter   userhttp.ManagementUserGetter
+	managementAppsLister   contenthttp.ManagementAppsLister
+	preparingAppCreator    contenthttp.PreparingAppCreator
+	managementAppGetter    contenthttp.ManagementAppGetter
+	managementAppUpdater   contenthttp.ManagementAppUpdater
+	managementAppPublisher contenthttp.ManagementAppPublisher
+}
+
+// WithManagementAppPublicationUseCase は運営App公開Use Caseを設定します。
+func WithManagementAppPublicationUseCase(publisher contenthttp.ManagementAppPublisher) Option {
+	return func(dependencies *dependencies) {
+		if publisher != nil {
+			dependencies.managementAppPublisher = publisher
+		}
+	}
 }
 
 // WithManagementAppDetailUseCases は運営App詳細の取得・更新Use Caseを設定します。
@@ -131,6 +141,7 @@ type unavailablePreparingAppCreator struct{ unavailableManagementApps }
 
 type unavailableManagementAppGetter struct{ unavailableManagementApps }
 type unavailableManagementAppUpdater struct{ unavailableManagementApps }
+type unavailableManagementAppPublisher struct{ unavailableManagementApps }
 
 func (unavailableManagementAppGetter) Execute(context.Context, string) (application.ManagementAppResult, error) {
 	return application.ManagementAppResult{}, errors.New("management app is not configured")
@@ -138,6 +149,10 @@ func (unavailableManagementAppGetter) Execute(context.Context, string) (applicat
 
 func (unavailableManagementAppUpdater) Execute(context.Context, string, string, string, []string, int64) (application.ManagementAppResult, error) {
 	return application.ManagementAppResult{}, errors.New("management app is not configured")
+}
+
+func (unavailableManagementAppPublisher) Execute(context.Context, string, string, string, int64) (application.ManagementAppResult, error) {
+	return application.ManagementAppResult{}, errors.New("management app publication is not configured")
 }
 
 func (unavailablePreparingAppCreator) Execute(ctx context.Context, slug, title, description string, tags []string) (application.ManagementAppResult, error) {
@@ -183,17 +198,18 @@ func (unavailableUserRegistrar) Execute(
 // Application はアプリケーション全体の依存関係を保持するコンポジションルートです。
 // 具体的な実装の組み立てをこの型へ集約し、各機能から依存生成の責務を分離します。
 type Application struct {
-	handler                   http.Handler
-	healthHandler             http.Handler
-	appsListHandler           http.Handler
-	appDetailHandler          http.Handler
-	meHandler                 http.Handler
-	userRegistrationHandler   http.Handler
-	userProfileHandler        http.Handler
-	managementUserHandler     http.Handler
-	managementAppsHandler     http.Handler
-	managementAppHandler      http.Handler
-	managementNotFoundHandler http.Handler
+	handler                         http.Handler
+	healthHandler                   http.Handler
+	appsListHandler                 http.Handler
+	appDetailHandler                http.Handler
+	meHandler                       http.Handler
+	userRegistrationHandler         http.Handler
+	userProfileHandler              http.Handler
+	managementUserHandler           http.Handler
+	managementAppsHandler           http.Handler
+	managementAppHandler            http.Handler
+	managementAppPublicationHandler http.Handler
+	managementNotFoundHandler       http.Handler
 }
 
 // New はロガーを受け取り、実行可能なApplicationを構築します。
@@ -203,16 +219,17 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 		logger = slog.Default()
 	}
 	dependencies := dependencies{
-		accessTokenVerifier:  rejectAccessTokenVerifier{},
-		userGetter:           unavailableUserGetter{},
-		userRegistrar:        unavailableUserRegistrar{},
-		profileGetter:        unavailableProfileUseCase{},
-		profileUpdater:       unavailableProfileUpdater{},
-		managementUserGetter: unavailableManagementUserGetter{},
-		managementAppsLister: unavailableManagementApps{},
-		preparingAppCreator:  unavailablePreparingAppCreator{},
-		managementAppGetter:  unavailableManagementAppGetter{},
-		managementAppUpdater: unavailableManagementAppUpdater{},
+		accessTokenVerifier:    rejectAccessTokenVerifier{},
+		userGetter:             unavailableUserGetter{},
+		userRegistrar:          unavailableUserRegistrar{},
+		profileGetter:          unavailableProfileUseCase{},
+		profileUpdater:         unavailableProfileUpdater{},
+		managementUserGetter:   unavailableManagementUserGetter{},
+		managementAppsLister:   unavailableManagementApps{},
+		preparingAppCreator:    unavailablePreparingAppCreator{},
+		managementAppGetter:    unavailableManagementAppGetter{},
+		managementAppUpdater:   unavailableManagementAppUpdater{},
+		managementAppPublisher: unavailableManagementAppPublisher{},
 	}
 	for _, option := range options {
 		option(&dependencies)
@@ -227,6 +244,7 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 	managementUserHandler := userhttp.NewManagementHandler(dependencies.managementUserGetter, responder)
 	managementAppsHandler := contenthttp.NewManagementAppsHandler(dependencies.managementUserGetter, dependencies.managementAppsLister, dependencies.preparingAppCreator, responder)
 	managementAppHandler := contenthttp.NewManagementAppHandler(dependencies.managementUserGetter, dependencies.managementAppGetter, dependencies.managementAppUpdater, responder)
+	managementAppPublicationHandler := contenthttp.NewManagementAppPublicationHandler(dependencies.managementUserGetter, dependencies.managementAppPublisher, responder)
 	managementNotFoundHandler := responder.NotFoundHandler()
 	appStore, err := infrastructure.NewSeededMemoryAppStore()
 	if err != nil {
@@ -261,6 +279,7 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 	)
 	concealedManagementAppsHandler := httpapi.Chain(managementAppsHandler, httpapi.ConcealBearer(dependencies.accessTokenVerifier, responder))
 	concealedManagementAppHandler := httpapi.Chain(managementAppHandler, httpapi.ConcealBearer(dependencies.accessTokenVerifier, responder))
+	concealedManagementAppPublicationHandler := httpapi.Chain(managementAppPublicationHandler, httpapi.ConcealBearer(dependencies.accessTokenVerifier, responder))
 
 	return &Application{
 		handler: middleware.Wrap(httpapi.NewRouter(
@@ -273,18 +292,20 @@ func New(logger *slog.Logger, options ...Option) (*Application, error) {
 			concealedManagementUserHandler,
 			concealedManagementAppsHandler,
 			concealedManagementAppHandler,
+			concealedManagementAppPublicationHandler,
 			managementNotFoundHandler,
 		)),
-		healthHandler:             middleware.Wrap(healthHandler),
-		appsListHandler:           middleware.Wrap(http.HandlerFunc(appsHandler.List)),
-		appDetailHandler:          middleware.Wrap(http.HandlerFunc(appsHandler.Get)),
-		meHandler:                 middleware.Wrap(authenticatedMeHandler),
-		userRegistrationHandler:   middleware.Wrap(authenticatedUserMeHandler),
-		userProfileHandler:        middleware.Wrap(authenticatedUserProfileHandler),
-		managementUserHandler:     middleware.Wrap(concealedManagementUserHandler),
-		managementAppsHandler:     middleware.Wrap(concealedManagementAppsHandler),
-		managementAppHandler:      middleware.Wrap(concealedManagementAppHandler),
-		managementNotFoundHandler: middleware.Wrap(managementNotFoundHandler),
+		healthHandler:                   middleware.Wrap(healthHandler),
+		appsListHandler:                 middleware.Wrap(http.HandlerFunc(appsHandler.List)),
+		appDetailHandler:                middleware.Wrap(http.HandlerFunc(appsHandler.Get)),
+		meHandler:                       middleware.Wrap(authenticatedMeHandler),
+		userRegistrationHandler:         middleware.Wrap(authenticatedUserMeHandler),
+		userProfileHandler:              middleware.Wrap(authenticatedUserProfileHandler),
+		managementUserHandler:           middleware.Wrap(concealedManagementUserHandler),
+		managementAppsHandler:           middleware.Wrap(concealedManagementAppsHandler),
+		managementAppHandler:            middleware.Wrap(concealedManagementAppHandler),
+		managementAppPublicationHandler: middleware.Wrap(concealedManagementAppPublicationHandler),
+		managementNotFoundHandler:       middleware.Wrap(managementNotFoundHandler),
 	}, nil
 }
 
@@ -293,6 +314,11 @@ func (a *Application) ManagementAppsHandler() http.Handler { return a.management
 
 // ManagementAppHandler はVercelの運営App詳細Functionで使用するHandlerを返します。
 func (a *Application) ManagementAppHandler() http.Handler { return a.managementAppHandler }
+
+// ManagementAppPublicationHandler はVercelの運営App公開Functionで使用するHandlerを返します。
+func (a *Application) ManagementAppPublicationHandler() http.Handler {
+	return a.managementAppPublicationHandler
+}
 
 // ManagementUserHandler はVercelの運営User確認Functionで使用するHandlerを返します。
 func (a *Application) ManagementUserHandler() http.Handler { return a.managementUserHandler }

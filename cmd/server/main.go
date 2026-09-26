@@ -79,6 +79,7 @@ func main() {
 				contentapp.NewGetManagementAppUseCase(contentRepository),
 				contentapp.NewUpdateManagementAppUseCase(contentRepository),
 			),
+			app.WithManagementAppPublicationUseCase(contentapp.NewPublishManagementAppUseCase(contentRepository, nil)),
 			app.WithUserRegistrar(registerUser),
 			app.WithProfileUseCases(
 				userapp.NewGetCurrentProfileUseCase(profileRepository),

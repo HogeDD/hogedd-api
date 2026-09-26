@@ -125,3 +125,21 @@ RETURNING version`, app.Title(), app.Description(), app.Tags(), app.Slug().Strin
 	}
 	return version, nil
 }
+
+// Publish はversion一致時だけAppを公開済みに更新して新しいversionを返します。
+func (r *PostgresAppRepository) Publish(ctx context.Context, app *domain.App, expectedVersion int64) (int64, error) {
+	var version int64
+	err := r.db.QueryRowContext(ctx, `
+UPDATE content_apps
+SET publication_status = $1, published_at = $2, development_drive = $3, youtube_url = $4,
+    version = version + 1, updated_at = CURRENT_TIMESTAMP
+WHERE slug = $5 AND publication_status = 'preparing' AND version = $6
+RETURNING version`, string(app.PublicationStatus()), app.PublishedAt(), app.DevelopmentDrive(), app.YouTubeURL(), app.Slug().String(), expectedVersion).Scan(&version)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, application.ErrAppVersionConflict
+	}
+	if err != nil {
+		return 0, fmt.Errorf("publish content app: %w", err)
+	}
+	return version, nil
+}

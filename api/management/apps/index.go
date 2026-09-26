@@ -48,6 +48,7 @@ func newApplication() *app.Application {
 		app.WithManagementUserGetter(userapp.NewGetManagementUserUseCase(users)),
 		app.WithManagementAppUseCases(contentapp.NewListManagementAppsUseCase(apps), contentapp.NewCreatePreparingAppUseCase(apps)),
 		app.WithManagementAppDetailUseCases(contentapp.NewGetManagementAppUseCase(apps), contentapp.NewUpdateManagementAppUseCase(apps)),
+		app.WithManagementAppPublicationUseCase(contentapp.NewPublishManagementAppUseCase(apps, nil)),
 	)
 	if err != nil {
 		panic(err)

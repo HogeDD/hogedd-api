@@ -323,6 +323,55 @@ paths:
           $ref: "#/components/responses/ManagementNotFound"
         "500":
           $ref: "#/components/responses/InternalError"
+  /v1/management/apps/{slug}/publication:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+    put:
+      summary: 公開準備中Appを公開
+      description: 公開日時はサーバーが確定する。公開済みAppへの再実行は現在値を返す。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [development_drive, youtube_url, version]
+              properties:
+                development_drive:
+                  type: string
+                  minLength: 1
+                youtube_url:
+                  type: string
+                  format: uri
+                version:
+                  type: integer
+                  format: int64
+                  minimum: 1
+      responses:
+        "200":
+          description: 公開済みApp
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManagementApp"
+        "400":
+          description: JSON形式またはrequest bodyが不正
+        "404":
+          $ref: "#/components/responses/ManagementNotFound"
+        "409":
+          description: version競合
+        "422":
+          description: 公開条件がdomain ruleを満たさない
+        "500":
+          $ref: "#/components/responses/InternalError"
     head:
       summary: 運営用App詳細を取得可能か確認
       security:
@@ -491,6 +540,14 @@ components:
           type: integer
           format: int64
           minimum: 1
+        published_at:
+          type: string
+          format: date-time
+        development_drive:
+          type: string
+        youtube_url:
+          type: string
+          format: uri
     CreateManagementApp:
       type: object
       additionalProperties: false
