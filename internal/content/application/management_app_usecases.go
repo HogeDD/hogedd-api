@@ -24,6 +24,7 @@ type AppCreator interface {
 
 // ManagementAppResult は運営画面へ返す公開前情報を含むAppです。
 type ManagementAppResult struct {
+	ID               string   `json:"id"`
 	Slug             string   `json:"slug"`
 	Title            string   `json:"title"`
 	Description      string   `json:"description"`
@@ -250,7 +251,7 @@ func (uc *ListManagementAppsUseCase) Execute(ctx context.Context) ([]ManagementA
 }
 
 func toManagementAppResult(app *domain.App) ManagementAppResult {
-	result := ManagementAppResult{Slug: app.Slug().String(), Title: app.Title(), Description: app.Description(), Tags: app.Tags(), Status: string(app.PublicationStatus())}
+	result := ManagementAppResult{ID: app.ID().String(), Slug: app.Slug().String(), Title: app.Title(), Description: app.Description(), Tags: app.Tags(), Status: string(app.PublicationStatus())}
 	if app.PublicationStatus() != domain.PublicationStatusPreparing {
 		if !app.PublishedAt().IsZero() {
 			result.PublishedAt = app.PublishedAt().UTC().Format(time.RFC3339)
