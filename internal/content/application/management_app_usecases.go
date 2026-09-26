@@ -131,7 +131,7 @@ func (uc *PublishManagementAppUseCase) ExecutePrivate(ctx context.Context, value
 // ManagementAppEditor は管理用Appの取得と楽観的ロック更新に必要なportです。
 type ManagementAppEditor interface {
 	FindForManagement(context.Context, domain.Slug) (*domain.App, int64, bool, error)
-	UpdateDraft(context.Context, *domain.App, int64) (int64, error)
+	Update(context.Context, *domain.App, int64) (int64, error)
 }
 
 // GetManagementAppUseCase は管理用App詳細を取得します。
@@ -168,8 +168,8 @@ func NewUpdateManagementAppUseCase(editor ManagementAppEditor) *UpdateManagement
 	return &UpdateManagementAppUseCase{editor: editor}
 }
 
-// Execute は現在versionを照合し、Draft情報を更新します。
-func (uc *UpdateManagementAppUseCase) Execute(ctx context.Context, value, title, description string, tags []string, expectedVersion int64) (ManagementAppResult, error) {
+// Execute は現在versionを照合し、管理対象Appの情報と公開状態を一括更新します。
+func (uc *UpdateManagementAppUseCase) Execute(ctx context.Context, value, title, description string, tags []string, statusValue, developmentDrive, youTubeURL string, expectedVersion int64) (ManagementAppResult, error) {
 	if expectedVersion < 1 {
 		return ManagementAppResult{}, ErrAppVersionConflict
 	}
@@ -184,10 +184,18 @@ func (uc *UpdateManagementAppUseCase) Execute(ctx context.Context, value, title,
 	if !found {
 		return ManagementAppResult{}, ErrManagementAppNotFound
 	}
-	if err := app.UpdateDraftDetails(title, description, tags); err != nil {
+	status, err := domain.ParsePublicationStatus(statusValue)
+	if err != nil {
 		return ManagementAppResult{}, err
 	}
-	version, err := uc.editor.UpdateDraft(ctx, app, expectedVersion)
+	publishedAt := app.PublishedAt()
+	if status == domain.PublicationStatusPublished && publishedAt.IsZero() {
+		publishedAt = time.Now().UTC()
+	}
+	if err := app.UpdateManagementDetails(title, description, tags, status, developmentDrive, youTubeURL, publishedAt); err != nil {
+		return ManagementAppResult{}, err
+	}
+	version, err := uc.editor.Update(ctx, app, expectedVersion)
 	if err != nil {
 		return ManagementAppResult{}, err
 	}
@@ -243,8 +251,10 @@ func (uc *ListManagementAppsUseCase) Execute(ctx context.Context) ([]ManagementA
 
 func toManagementAppResult(app *domain.App) ManagementAppResult {
 	result := ManagementAppResult{Slug: app.Slug().String(), Title: app.Title(), Description: app.Description(), Tags: app.Tags(), Status: string(app.PublicationStatus())}
-	if app.PublicationStatus().IsPublic() {
-		result.PublishedAt = app.PublishedAt().UTC().Format(time.RFC3339)
+	if app.PublicationStatus() != domain.PublicationStatusPreparing {
+		if !app.PublishedAt().IsZero() {
+			result.PublishedAt = app.PublishedAt().UTC().Format(time.RFC3339)
+		}
 		result.DevelopmentDrive = app.DevelopmentDrive()
 		result.YouTubeURL = app.YouTubeURL()
 	}

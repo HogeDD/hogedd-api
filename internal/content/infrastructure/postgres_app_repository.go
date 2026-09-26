@@ -157,12 +157,30 @@ FROM content_apps WHERE slug = $1`, slug.String()).Scan(&title, &description, &t
 
 // UpdateDraft はversion一致時だけDraft情報を更新して新しいversionを返します。
 func (r *PostgresAppRepository) UpdateDraft(ctx context.Context, app *domain.App, expectedVersion int64) (int64, error) {
+	return r.Update(ctx, app, expectedVersion)
+}
+
+// Update はversion一致時だけ管理対象Appの全編集項目を保存します。
+func (r *PostgresAppRepository) Update(ctx context.Context, app *domain.App, expectedVersion int64) (int64, error) {
 	var version int64
+	var publishedAt any
+	if !app.PublishedAt().IsZero() {
+		publishedAt = app.PublishedAt()
+	}
+	var developmentDrive, youTubeURL any
+	if app.DevelopmentDrive() != "" {
+		developmentDrive = app.DevelopmentDrive()
+	}
+	if app.YouTubeURL() != "" {
+		youTubeURL = app.YouTubeURL()
+	}
 	err := r.db.QueryRowContext(ctx, `
 UPDATE content_apps
-SET title = $1, description = $2, tags = $3, version = version + 1, updated_at = CURRENT_TIMESTAMP
-WHERE slug = $4 AND publication_status IN ('preparing', 'private') AND version = $5
-RETURNING version`, app.Title(), app.Description(), app.Tags(), app.Slug().String(), expectedVersion).Scan(&version)
+SET title = $1, description = $2, tags = $3, publication_status = $4,
+    published_at = $5, development_drive = $6, youtube_url = $7,
+    version = version + 1, updated_at = CURRENT_TIMESTAMP
+WHERE slug = $8 AND version = $9
+RETURNING version`, app.Title(), app.Description(), app.Tags(), string(app.PublicationStatus()), publishedAt, developmentDrive, youTubeURL, app.Slug().String(), expectedVersion).Scan(&version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, application.ErrAppVersionConflict
 	}

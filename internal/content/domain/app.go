@@ -68,6 +68,48 @@ func (a *App) UpdateDraftDetails(title, description string, tags []string) error
 	return nil
 }
 
+// UpdateManagementDetails は管理画面で変更可能な情報と公開状態を一括で検証して更新します。
+func (a *App) UpdateManagementDetails(title, description string, tags []string, status PublicationStatus, developmentDrive, youTubeURL string, publishedAt time.Time) error {
+	updated, err := NewPreparingApp(a.slug, title, description, tags)
+	if err != nil {
+		return err
+	}
+	if status != PublicationStatusPrivate && status != PublicationStatusPublished {
+		return errors.New("management update status must be private or published")
+	}
+
+	developmentDrive = strings.TrimSpace(developmentDrive)
+	normalizedYouTubeURL := ""
+	if strings.TrimSpace(youTubeURL) != "" {
+		normalizedYouTubeURL, err = normalizeYouTubeURL(youTubeURL)
+		if err != nil {
+			return err
+		}
+	}
+	if status == PublicationStatusPublished {
+		if developmentDrive == "" {
+			return ErrDevelopmentDriveRequired
+		}
+		if normalizedYouTubeURL == "" {
+			return ErrInvalidYouTubeURL
+		}
+		if publishedAt.IsZero() {
+			return ErrPublishedAtRequired
+		}
+	}
+
+	a.title = updated.title
+	a.description = updated.description
+	a.tags = updated.tags
+	a.publicationStatus = status
+	a.developmentDrive = developmentDrive
+	a.youTubeURL = normalizedYouTubeURL
+	if !publishedAt.IsZero() {
+		a.publishedAt = publishedAt
+	}
+	return nil
+}
+
 // NewPreparingApp は公開準備中のAppを生成します。
 func NewPreparingApp(slug Slug, title, description string, tags []string) (*App, error) {
 	if slug.String() == "" {
@@ -132,10 +174,9 @@ func RestoreApp(slug Slug, title, description string, tags []string, status Publ
 			return nil, err
 		}
 	case PublicationStatusPrivate:
-		if err := app.Publish(publishedAt, developmentDrive, youTubeURL); err != nil {
+		if err := app.UpdateManagementDetails(title, description, tags, PublicationStatusPrivate, developmentDrive, youTubeURL, publishedAt); err != nil {
 			return nil, err
 		}
-		app.publicationStatus = PublicationStatusPrivate
 	default:
 		return nil, errors.New("invalid publication status")
 	}

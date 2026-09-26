@@ -165,7 +165,7 @@ func (unavailableManagementAppGetter) Execute(context.Context, string) (applicat
 	return application.ManagementAppResult{}, errors.New("management app is not configured")
 }
 
-func (unavailableManagementAppUpdater) Execute(context.Context, string, string, string, []string, int64) (application.ManagementAppResult, error) {
+func (unavailableManagementAppUpdater) Execute(context.Context, string, string, string, []string, string, string, string, int64) (application.ManagementAppResult, error) {
 	return application.ManagementAppResult{}, errors.New("management app is not configured")
 }
 

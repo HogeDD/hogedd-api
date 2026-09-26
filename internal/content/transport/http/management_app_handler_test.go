@@ -25,7 +25,7 @@ func (s managementAppGetterStub) Execute(context.Context, string) (contentapp.Ma
 
 type managementAppUpdaterStub struct{ managementAppGetterStub }
 
-func (s managementAppUpdaterStub) Execute(context.Context, string, string, string, []string, int64) (contentapp.ManagementAppResult, error) {
+func (s managementAppUpdaterStub) Execute(context.Context, string, string, string, []string, string, string, string, int64) (contentapp.ManagementAppResult, error) {
 	return s.result, s.err
 }
 
@@ -49,14 +49,14 @@ func TestManagementAppHandlerGetsAndUpdatesDraft(t *testing.T) {
 	if get.Code != http.StatusOK || !strings.Contains(get.Body.String(), `"version":2`) {
 		t.Fatalf("GET = %d %s", get.Code, get.Body.String())
 	}
-	update := managementAppRequest(t, http.MethodPut, `{"title":"Draft","description":"Description","tags":[],"version":1}`, managementAuthorizerStub{}, result, nil)
+	update := managementAppRequest(t, http.MethodPut, `{"title":"Draft","description":"Description","tags":[],"status":"private","development_drive":"","youtube_url":"","version":1}`, managementAuthorizerStub{}, result, nil)
 	if update.Code != http.StatusOK {
 		t.Fatalf("PUT = %d %s", update.Code, update.Body.String())
 	}
 }
 
 func TestManagementAppHandlerMapsConflictAndConcealsAuthorization(t *testing.T) {
-	conflict := managementAppRequest(t, http.MethodPut, `{"title":"Draft","description":"Description","tags":[],"version":1}`, managementAuthorizerStub{}, contentapp.ManagementAppResult{}, contentapp.ErrAppVersionConflict)
+	conflict := managementAppRequest(t, http.MethodPut, `{"title":"Draft","description":"Description","tags":[],"status":"private","development_drive":"","youtube_url":"","version":1}`, managementAuthorizerStub{}, contentapp.ManagementAppResult{}, contentapp.ErrAppVersionConflict)
 	if conflict.Code != http.StatusConflict {
 		t.Fatalf("conflict status = %d", conflict.Code)
 	}

@@ -603,7 +603,7 @@ components:
     UpdateManagementApp:
       type: object
       additionalProperties: false
-      required: [title, description, tags, version]
+      required: [title, description, tags, status, development_drive, youtube_url, version]
       properties:
         title:
           type: string
@@ -621,6 +621,14 @@ components:
             type: string
             minLength: 1
             maxLength: 30
+        status:
+          type: string
+          enum: [private, published]
+        development_drive:
+          type: string
+        youtube_url:
+          type: string
+          description: 非公開では空文字を許可し、公開時は有効なYouTube URLを必須とする。
         version:
           type: integer
           format: int64
