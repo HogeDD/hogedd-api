@@ -41,6 +41,11 @@ type ManagementAppPublisher interface {
 	Publish(context.Context, *domain.App, int64) (int64, error)
 }
 
+// ManagementAppPrivatePublisher は公開済みAppを非公開へ切り替えるportです。
+type ManagementAppPrivatePublisher interface {
+	MakePrivate(context.Context, *domain.App, int64) (int64, error)
+}
+
 // PublishManagementAppUseCase は公開準備中Appを公開します。
 type PublishManagementAppUseCase struct {
 	publisher ManagementAppPublisher
@@ -83,6 +88,38 @@ func (uc *PublishManagementAppUseCase) Execute(ctx context.Context, value, devel
 		return ManagementAppResult{}, err
 	}
 	version, err = uc.publisher.Publish(ctx, app, expectedVersion)
+	if err != nil {
+		return ManagementAppResult{}, err
+	}
+	result := toManagementAppResult(app)
+	result.Version = version
+	return result, nil
+}
+
+// ExecutePrivate は公開済みAppを非公開へ切り替えます。
+func (uc *PublishManagementAppUseCase) ExecutePrivate(ctx context.Context, value string, expectedVersion int64) (ManagementAppResult, error) {
+	privatePublisher, ok := uc.publisher.(ManagementAppPrivatePublisher)
+	if !ok || expectedVersion < 1 {
+		return ManagementAppResult{}, ErrAppVersionConflict
+	}
+	slug, err := domain.NewSlug(value)
+	if err != nil {
+		return ManagementAppResult{}, ErrManagementAppNotFound
+	}
+	app, version, found, err := uc.publisher.FindForManagement(ctx, slug)
+	if err != nil {
+		return ManagementAppResult{}, err
+	}
+	if !found {
+		return ManagementAppResult{}, ErrManagementAppNotFound
+	}
+	if version != expectedVersion {
+		return ManagementAppResult{}, ErrAppVersionConflict
+	}
+	if err := app.MakePrivate(); err != nil {
+		return ManagementAppResult{}, err
+	}
+	version, err = privatePublisher.MakePrivate(ctx, app, expectedVersion)
 	if err != nil {
 		return ManagementAppResult{}, err
 	}

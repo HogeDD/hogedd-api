@@ -10,6 +10,8 @@ const (
 	PublicationStatusPreparing PublicationStatus = "preparing"
 	// PublicationStatusPublished はコンテンツが公開済みであることを表します。
 	PublicationStatusPublished PublicationStatus = "published"
+	// PublicationStatusPrivate は公開を停止して管理下に保持している状態を表します。
+	PublicationStatusPrivate PublicationStatus = "private"
 )
 
 // IsPublic は公開APIから取得可能な状態の場合にtrueを返します。
@@ -21,7 +23,7 @@ func (s PublicationStatus) IsPublic() bool {
 func ParsePublicationStatus(value string) (PublicationStatus, error) {
 	status := PublicationStatus(value)
 	switch status {
-	case PublicationStatusPreparing, PublicationStatusPublished:
+	case PublicationStatusPreparing, PublicationStatusPublished, PublicationStatusPrivate:
 		return status, nil
 	default:
 		return "", fmt.Errorf("invalid publication status: %q", value)

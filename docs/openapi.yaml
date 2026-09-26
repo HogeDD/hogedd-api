@@ -357,8 +357,8 @@ paths:
           type: string
           pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
     put:
-      summary: 公開準備中Appを公開
-      description: 公開日時はサーバーが確定する。公開済みAppへの再実行は現在値を返す。
+      summary: Appを公開・非公開化
+      description: statusがpublishedの場合は公開し、privateの場合は一般公開を停止する。versionで競合を検出する。
       security:
         - bearerAuth: []
       requestBody:
@@ -368,8 +368,11 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [development_drive, youtube_url, version]
+              required: [version]
               properties:
+                status:
+                  type: string
+                  enum: [published, private]
                 development_drive:
                   type: string
                   minLength: 1
@@ -382,7 +385,7 @@ paths:
                   minimum: 1
       responses:
         "200":
-          description: 公開済みApp
+          description: 更新後のApp
           content:
             application/json:
               schema:
@@ -552,7 +555,7 @@ components:
           maxLength: 1000
         status:
           type: string
-          enum: [preparing, published]
+          enum: [preparing, published, private]
         tags:
           type: array
           maxItems: 10

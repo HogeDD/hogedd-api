@@ -18,6 +18,10 @@ type ManagementAppPublisher interface {
 	Execute(context.Context, string, string, string, int64) (contentapp.ManagementAppResult, error)
 }
 
+type managementAppPrivatePublisher interface {
+	ExecutePrivate(context.Context, string, int64) (contentapp.ManagementAppResult, error)
+}
+
 // ManagementAppPublicationHandler はAppの公開操作を処理します。
 type ManagementAppPublicationHandler struct {
 	authorize ManagementAppsAuthorizer
@@ -50,6 +54,7 @@ func (h *ManagementAppPublicationHandler) ServeHTTP(w http.ResponseWriter, r *ht
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	var input struct {
+		Status           string `json:"status"`
 		DevelopmentDrive string `json:"development_drive"`
 		YouTubeURL       string `json:"youtube_url"`
 		Version          int64  `json:"version"`
@@ -62,7 +67,18 @@ func (h *ManagementAppPublicationHandler) ServeHTTP(w http.ResponseWriter, r *ht
 		h.responder.Error(w, r, http.StatusBadRequest, "invalid_request", "request body must contain one JSON object")
 		return
 	}
-	result, err := h.publish.Execute(r.Context(), r.PathValue("slug"), input.DevelopmentDrive, input.YouTubeURL, input.Version)
+	var result contentapp.ManagementAppResult
+	var err error
+	if input.Status == "private" {
+		privatePublisher, ok := h.publish.(managementAppPrivatePublisher)
+		if !ok {
+			h.responder.InternalError(w, r, "make management app private", errors.New("private publication is not configured"))
+			return
+		}
+		result, err = privatePublisher.ExecutePrivate(r.Context(), r.PathValue("slug"), input.Version)
+	} else {
+		result, err = h.publish.Execute(r.Context(), r.PathValue("slug"), input.DevelopmentDrive, input.YouTubeURL, input.Version)
+	}
 	switch {
 	case errors.Is(err, contentapp.ErrManagementAppNotFound):
 		h.responder.ConcealedNotFound(w, r, "management_app_not_found", err)

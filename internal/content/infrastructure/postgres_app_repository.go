@@ -161,7 +161,7 @@ func (r *PostgresAppRepository) UpdateDraft(ctx context.Context, app *domain.App
 	err := r.db.QueryRowContext(ctx, `
 UPDATE content_apps
 SET title = $1, description = $2, tags = $3, version = version + 1, updated_at = CURRENT_TIMESTAMP
-WHERE slug = $4 AND publication_status = 'preparing' AND version = $5
+WHERE slug = $4 AND publication_status IN ('preparing', 'private') AND version = $5
 RETURNING version`, app.Title(), app.Description(), app.Tags(), app.Slug().String(), expectedVersion).Scan(&version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, application.ErrAppVersionConflict
@@ -179,13 +179,30 @@ func (r *PostgresAppRepository) Publish(ctx context.Context, app *domain.App, ex
 UPDATE content_apps
 SET publication_status = $1, published_at = $2, development_drive = $3, youtube_url = $4,
     version = version + 1, updated_at = CURRENT_TIMESTAMP
-WHERE slug = $5 AND publication_status = 'preparing' AND version = $6
+WHERE slug = $5 AND publication_status IN ('preparing', 'private') AND version = $6
 RETURNING version`, string(app.PublicationStatus()), app.PublishedAt(), app.DevelopmentDrive(), app.YouTubeURL(), app.Slug().String(), expectedVersion).Scan(&version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, application.ErrAppVersionConflict
 	}
 	if err != nil {
 		return 0, fmt.Errorf("publish content app: %w", err)
+	}
+	return version, nil
+}
+
+// MakePrivate はversion一致時だけAppを非公開に更新して新しいversionを返します。
+func (r *PostgresAppRepository) MakePrivate(ctx context.Context, app *domain.App, expectedVersion int64) (int64, error) {
+	var version int64
+	err := r.db.QueryRowContext(ctx, `
+UPDATE content_apps
+SET publication_status = 'private', version = version + 1, updated_at = CURRENT_TIMESTAMP
+WHERE slug = $1 AND publication_status = 'published' AND version = $2
+RETURNING version`, app.Slug().String(), expectedVersion).Scan(&version)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, application.ErrAppVersionConflict
+	}
+	if err != nil {
+		return 0, fmt.Errorf("make content app private: %w", err)
 	}
 	return version, nil
 }
