@@ -14,6 +14,8 @@ PUT /v1/users/me
 GET /v1/users/me/profile
 PUT /v1/users/me/profile
 GET /v1/management/me
+GET /v1/management/apps
+POST /v1/management/apps
 ```
 
 一覧は `{ "data": [...] }`、詳細はアプリ1件のJSONを返します。準備中または存在しないslugは`404`です。現在は`hogedd-web`の定義を元にした5件をメモリで保持し、公開済みのClean Tasksだけを返します。契約は [OpenAPI](docs/openapi.yaml)、処理のつながりは [Contentの処理の流れ](docs/content-flow.md) を参照してください。
@@ -29,6 +31,8 @@ GET /v1/management/me
 
 `GET /v1/management/me`は`active`な`owner`・`admin`だけが利用できます。管理境界の存在を秘匿するため、tokenなし、不正token、未登録、`member`、`disabled`、認可確認失敗は同じ`404 not_found`を返します。内部ログでは拒否理由を区別します。
 roleの付与・剥奪と緊急停止は、管理GUIを導入するまで[User権限の運用](docs/user-access-operations.md)に従います。
+
+`GET /v1/management/apps`と`POST /v1/management/apps`は同じ秘匿認可を適用し、公開準備中を含むApp一覧の取得とdraft作成を提供します。管理用AppはPostgreSQLへ保存し、公開APIの既存メモリデータとはまだ分離されています。
 
 ```sh
 curl -i http://localhost:8080/v1/apps

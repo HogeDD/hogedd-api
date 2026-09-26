@@ -5,6 +5,18 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
+)
+
+const (
+	// MaxTitleLength はApp名の最大文字数です。
+	MaxTitleLength = 100
+	// MaxDescriptionLength はApp紹介文の最大文字数です。
+	MaxDescriptionLength = 1000
+	// MaxTags はAppへ設定できるタグ数です。
+	MaxTags = 10
+	// MaxTagLength は1タグの最大文字数です。
+	MaxTagLength = 30
 )
 
 var (
@@ -12,6 +24,12 @@ var (
 	ErrTitleRequired = errors.New("app title is required")
 	// ErrDescriptionRequired はAppの紹介文が空であることを表します。
 	ErrDescriptionRequired = errors.New("app description is required")
+	// ErrTitleTooLong はApp名が上限を超えていることを表します。
+	ErrTitleTooLong = errors.New("app title is too long")
+	// ErrDescriptionTooLong はApp紹介文が上限を超えていることを表します。
+	ErrDescriptionTooLong = errors.New("app description is too long")
+	// ErrInvalidTags はタグが個数・文字数・一意性の制約を満たさないことを表します。
+	ErrInvalidTags = errors.New("invalid app tags")
 	// ErrPublishedAtRequired は公開日時が指定されていないことを表します。
 	ErrPublishedAtRequired = errors.New("published at is required")
 	// ErrDevelopmentDriveRequired は開発動機が空であることを表します。
@@ -43,19 +61,63 @@ func NewPreparingApp(slug Slug, title, description string, tags []string) (*App,
 	if title == "" {
 		return nil, ErrTitleRequired
 	}
+	if utf8.RuneCountInString(title) > MaxTitleLength {
+		return nil, ErrTitleTooLong
+	}
 
 	description = strings.TrimSpace(description)
 	if description == "" {
 		return nil, ErrDescriptionRequired
+	}
+	if utf8.RuneCountInString(description) > MaxDescriptionLength {
+		return nil, ErrDescriptionTooLong
+	}
+	if len(tags) > MaxTags {
+		return nil, ErrInvalidTags
+	}
+	normalizedTags := make([]string, 0, len(tags))
+	seenTags := make(map[string]struct{}, len(tags))
+	for _, tag := range tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" || utf8.RuneCountInString(tag) > MaxTagLength {
+			return nil, ErrInvalidTags
+		}
+		key := strings.ToLower(tag)
+		if _, exists := seenTags[key]; exists {
+			return nil, ErrInvalidTags
+		}
+		seenTags[key] = struct{}{}
+		normalizedTags = append(normalizedTags, tag)
 	}
 
 	return &App{
 		slug:              slug,
 		title:             title,
 		description:       description,
-		tags:              append([]string(nil), tags...),
+		tags:              normalizedTags,
 		publicationStatus: PublicationStatusPreparing,
 	}, nil
+}
+
+// RestoreApp は永続化された値からAppを復元し、domain invariantを再検証します。
+func RestoreApp(slug Slug, title, description string, tags []string, status PublicationStatus, publishedAt time.Time, developmentDrive, youTubeURL string) (*App, error) {
+	app, err := NewPreparingApp(slug, title, description, tags)
+	if err != nil {
+		return nil, err
+	}
+	switch status {
+	case PublicationStatusPreparing:
+		if !publishedAt.IsZero() || developmentDrive != "" || youTubeURL != "" {
+			return nil, errors.New("preparing app has publication fields")
+		}
+	case PublicationStatusPublished:
+		if err := app.Publish(publishedAt, developmentDrive, youTubeURL); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, errors.New("invalid publication status")
+	}
+	return app, nil
 }
 
 // Publish は公開に必要な情報を検証し、Appを公開済みにします。

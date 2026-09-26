@@ -30,6 +30,10 @@
       "destination": "/api/management/me"
     },
     {
+      "source": "/v1/management/apps",
+      "destination": "/api/management/apps"
+    },
+    {
       "source": "/v1/management",
       "destination": "/api/management/not-found"
     },

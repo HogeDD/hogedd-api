@@ -277,6 +277,69 @@ paths:
           description: 利用可能
         "404":
           description: route、認証、認可、User状態のいずれかを理由に利用不可
+  /v1/management/apps:
+    get:
+      summary: 運営用App一覧を取得
+      description: draftを含む全Appを返す。activeなowner・adminだけが利用できる。
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 運営用App一覧
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ManagementApp"
+        "404":
+          $ref: "#/components/responses/ManagementNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    head:
+      summary: 運営用App一覧を取得可能か確認
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 取得可能
+        "404":
+          $ref: "#/components/responses/ManagementNotFound"
+    post:
+      summary: 公開準備中Appを作成
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateManagementApp"
+      responses:
+        "201":
+          description: 作成した公開準備中App
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManagementApp"
+        "400":
+          description: JSON形式またはrequest bodyが不正
+        "404":
+          $ref: "#/components/responses/ManagementNotFound"
+        "409":
+          description: 同じslugのAppが存在する
+        "422":
+          description: App入力がdomain ruleを満たさない
+        "500":
+          $ref: "#/components/responses/InternalError"
 components:
   securitySchemes:
     bearerAuth:
@@ -337,6 +400,57 @@ components:
         role:
           type: string
           enum: [owner, admin]
+    ManagementApp:
+      type: object
+      additionalProperties: false
+      required: [slug, title, description, status, tags]
+      properties:
+        slug:
+          type: string
+          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        status:
+          type: string
+          enum: [preparing, published]
+        tags:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 30
+    CreateManagementApp:
+      type: object
+      additionalProperties: false
+      required: [slug, title, description, tags]
+      properties:
+        slug:
+          type: string
+          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        tags:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 30
     PublishedApp:
       type: object
       required: [slug, title, description, status, published_at, tags, development_drive, youtube_url]

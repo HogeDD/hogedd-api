@@ -9,6 +9,8 @@ import (
 
 	"github.com/iwasawa/hogedd-api/internal/app"
 	"github.com/iwasawa/hogedd-api/internal/config"
+	contentapp "github.com/iwasawa/hogedd-api/internal/content/application"
+	contentinfra "github.com/iwasawa/hogedd-api/internal/content/infrastructure"
 	"github.com/iwasawa/hogedd-api/internal/identity/infrastructure/auth0"
 	"github.com/iwasawa/hogedd-api/internal/platform/httpserver"
 	platformpostgres "github.com/iwasawa/hogedd-api/internal/platform/postgres"
@@ -58,6 +60,7 @@ func main() {
 			os.Exit(1)
 		}
 		userRepository := userpostgres.NewUserRegistrar(database)
+		contentRepository := contentinfra.NewPostgresAppRepository(database)
 		registerUser := userapp.NewRegisterAuthenticatedUserUseCase(
 			profileProvider,
 			userRepository,
@@ -68,6 +71,10 @@ func main() {
 			applicationOptions,
 			app.WithUserGetter(getUser),
 			app.WithManagementUserGetter(userapp.NewGetManagementUserUseCase(userRepository)),
+			app.WithManagementAppUseCases(
+				contentapp.NewListManagementAppsUseCase(contentRepository),
+				contentapp.NewCreatePreparingAppUseCase(contentRepository),
+			),
 			app.WithUserRegistrar(registerUser),
 			app.WithProfileUseCases(
 				userapp.NewGetCurrentProfileUseCase(profileRepository),
